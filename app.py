@@ -38,6 +38,9 @@ from src.scenarios.reverse_stress import (
     ReverseStressConfig,
     reverse_stress_from_context,
 )
+from src.simulation.recovery_validation import (
+    validate_recovery_option_from_context,
+)
 from src.ui.liquidity import render_liquidity_risk
 
 
@@ -1265,6 +1268,54 @@ if page == "Stress Lab":
                 )
             )
 
+            recovery_validations = {}
+
+            validation_plans = [
+                (
+                    "Balanced",
+                    recovery_decision.recommended,
+                ),
+                (
+                    "Lowest Funding",
+                    recovery_decision
+                    .lowest_external_liquidity,
+                ),
+                (
+                    "Lowest Operational Disruption",
+                    recovery_decision
+                    .lowest_operational_disruption,
+                ),
+            ]
+
+            for (
+                plan_name,
+                option,
+            ) in validation_plans:
+
+                if option is None:
+                    continue
+
+                recovery_validations[
+                    plan_name
+                ] = (
+                    validate_recovery_option_from_context(
+                        context=stress_context,
+                        base_scenario=scenario,
+                        option=option,
+                        plan_name=plan_name,
+                        cash_floor=(
+                            risk_policy
+                            .minimum_cash_reserve
+                        ),
+                        max_shortfall_probability=(
+                            risk_policy
+                            .max_shortfall_probability
+                        ),
+                        simulations=5000,
+                        seed=42,
+                    )
+                )
+
         st.session_state["scenario_result"] = (
             scenario_result
         )
@@ -1279,6 +1330,10 @@ if page == "Stress Lab":
 
         st.session_state["recovery_decision"] = (
             recovery_decision
+        )
+
+        st.session_state["recovery_validations"] = (
+            recovery_validations
         )
 
     if "scenario_result" in st.session_state:
@@ -1296,6 +1351,13 @@ if page == "Stress Lab":
 
         recovery_decision = st.session_state.get(
             "recovery_decision"
+        )
+
+        recovery_validations = (
+            st.session_state.get(
+                "recovery_validations",
+                {},
+            )
         )
 
         st.markdown("### Stress result")
@@ -1675,8 +1737,25 @@ if page == "Stress Lab":
                     ),
                     (
                         "No External Funding",
-                        recovery_decision
-                        .no_external_liquidity,
+                        (
+                            None
+                            if (
+                                recovery_decision
+                                .no_external_liquidity
+                                is not None
+                                and recovery_decision
+                                .lowest_external_liquidity
+                                is not None
+                                and recovery_decision
+                                .no_external_liquidity
+                                .model_dump()
+                                == recovery_decision
+                                .lowest_external_liquidity
+                                .model_dump()
+                            )
+                            else recovery_decision
+                            .no_external_liquidity
+                        ),
                     ),
                 ]
 
@@ -1729,24 +1808,127 @@ if page == "Stress Lab":
                 )
 
                 if balanced is not None:
-                    st.success(
-                        "Balanced recommendation: combine "
-                        f"{balanced.revenue_improvement_pct:.0f}% "
-                        "revenue recovery, "
-                        f"{balanced.cost_reduction_pct:.0f}% "
-                        "cost reduction, "
-                        f"{balanced.receivable_acceleration_days} "
-                        "days faster collections and "
-                        f"{money(balanced.external_liquidity)} "
-                        "of external liquidity."
+                    balanced_validation = (
+                        recovery_validations.get(
+                            "Balanced"
+                        )
                     )
 
-                st.warning(
-                    "Decision-model scope: these recovery plans "
-                    "restore the deterministic minimum-cash target. "
-                    "They have not yet been validated against the "
-                    f"{risk_policy.max_shortfall_probability:.1%} "
-                    "maximum acceptable reserve-breach probability."
+                    if balanced_validation is not None:
+                        st.success(
+                            "Balanced plan: combine "
+                            f"{balanced.revenue_improvement_pct:.0f}% "
+                            "revenue recovery, "
+                            f"{balanced.cost_reduction_pct:.0f}% "
+                            "cost reduction and "
+                            f"{balanced.receivable_acceleration_days} "
+                            "days faster collections. "
+                            f"Deterministic funding is "
+                            f"{money(balanced.external_liquidity)}; "
+                            "after adding the "
+                            f"{money(balanced_validation.additional_buffer_required)} "
+                            "uncertainty buffer, total risk-adjusted "
+                            "liquidity is "
+                            f"{money(balanced_validation.risk_adjusted_total_liquidity)}, "
+                            "bringing modeled reserve-breach risk to "
+                            f"{balanced_validation.risk_adjusted_breach_probability:.1%}."
+                        )
+                    else:
+                        st.success(
+                            "Balanced recommendation: combine "
+                            f"{balanced.revenue_improvement_pct:.0f}% "
+                            "revenue recovery, "
+                            f"{balanced.cost_reduction_pct:.0f}% "
+                            "cost reduction, "
+                            f"{balanced.receivable_acceleration_days} "
+                            "days faster collections and "
+                            f"{money(balanced.external_liquidity)} "
+                            "of external liquidity."
+                        )
+
+                st.markdown(
+                    "#### Probabilistic validation"
+                )
+
+                st.caption(
+                    "Deterministic recovery plans are re-tested "
+                    "against forecast uncertainty using 5,000 "
+                    "paired-residual cash simulations."
+                )
+
+                validation_rows = []
+
+                for (
+                    plan_name,
+                    validation,
+                ) in recovery_validations.items():
+
+                    validation_rows.append(
+                        {
+                            "Plan":
+                                plan_name,
+                            "Breach risk before":
+                                (
+                                    f"{validation.reserve_breach_probability:.1%}"
+                                ),
+                            "Allowed":
+                                (
+                                    f"{validation.max_acceptable_breach_probability:.1%}"
+                                ),
+                            "Uncertainty buffer":
+                                money(
+                                    validation
+                                    .additional_buffer_required
+                                ),
+                            "Risk-adjusted funding":
+                                money(
+                                    validation
+                                    .risk_adjusted_total_liquidity
+                                ),
+                            "Breach risk after":
+                                (
+                                    f"{validation.risk_adjusted_breach_probability:.1%}"
+                                ),
+                            "Within appetite":
+                                (
+                                    "YES"
+                                    if validation
+                                    .risk_adjusted_within_appetite
+                                    else "NO"
+                                ),
+                        }
+                    )
+
+                st.dataframe(
+                    pd.DataFrame(
+                        validation_rows
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                if (
+                    recovery_validations
+                    and all(
+                        validation
+                        .risk_adjusted_within_appetite
+                        for validation
+                        in recovery_validations.values()
+                    )
+                ):
+                    st.success(
+                        "All shortlisted recovery plans can be "
+                        "brought within the selected probabilistic "
+                        "risk appetite by adding their calculated "
+                        "uncertainty buffers."
+                    )
+
+                st.caption(
+                    "Decision-model scope: recovery options are first "
+                    "generated using deterministic cash-flow constraints, "
+                    "then the shortlisted plans are re-tested against "
+                    "forecast uncertainty and the selected probabilistic "
+                    "risk appetite."
                 )
 
             else:

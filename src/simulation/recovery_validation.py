@@ -31,6 +31,13 @@ class RecoveryValidationResult(BaseModel):
 
     external_liquidity_already_in_plan: float
 
+    risk_adjusted_total_liquidity: float
+    risk_adjusted_breach_probability: float
+    risk_adjusted_within_appetite: bool
+
+    risk_adjusted_median_min_cash: float
+    risk_adjusted_p10_min_cash: float
+
 
 def validate_recovery_option_from_context(
     context: ForecastContext,
@@ -118,6 +125,48 @@ def validate_recovery_option_from_context(
         simulation.shortfall_probability
     )
 
+    additional_buffer = (
+        simulation.liquidity_buffer_at_confidence
+    )
+
+    risk_adjusted_total_liquidity = (
+        option.external_liquidity
+        + additional_buffer
+    )
+
+    adjusted_simulation = (
+        simulate_liquidity_from_context(
+            context,
+            SimulationInput(
+                revenue_change=(
+                    base_scenario.revenue_change
+                    + option.revenue_improvement_pct
+                    / 100.0
+                ),
+                cost_change=(
+                    base_scenario.cost_change
+                    - option.cost_reduction_pct
+                    / 100.0
+                ),
+                receivable_delay_days=(
+                    remaining_delay
+                ),
+                horizon=(
+                    base_scenario.horizon
+                ),
+                simulations=simulations,
+                seed=seed,
+                cash_floor=cash_floor,
+                initial_liquidity_injection=(
+                    risk_adjusted_total_liquidity
+                ),
+                confidence_level=(
+                    confidence_level
+                ),
+            ),
+        )
+    )
+
     probability_excess = max(
         0.0,
         breach_probability
@@ -149,13 +198,32 @@ def validate_recovery_option_from_context(
             simulation.median_end_cash
         ),
         additional_buffer_required=(
-            simulation
-            .liquidity_buffer_at_confidence
+            additional_buffer
         ),
         buffer_confidence_level=(
             confidence_level
         ),
         external_liquidity_already_in_plan=(
             option.external_liquidity
+        ),
+        risk_adjusted_total_liquidity=(
+            risk_adjusted_total_liquidity
+        ),
+        risk_adjusted_breach_probability=(
+            adjusted_simulation
+            .shortfall_probability
+        ),
+        risk_adjusted_within_appetite=(
+            adjusted_simulation
+            .shortfall_probability
+            <= max_shortfall_probability
+        ),
+        risk_adjusted_median_min_cash=(
+            adjusted_simulation
+            .median_min_cash
+        ),
+        risk_adjusted_p10_min_cash=(
+            adjusted_simulation
+            .p10_min_cash
         ),
     )

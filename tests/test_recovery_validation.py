@@ -155,3 +155,39 @@ def test_additional_buffer_is_non_negative(
         result.additional_buffer_required
         >= 0.0
     )
+
+
+def test_uncertainty_buffer_restores_risk_appetite(
+    setup,
+):
+    context, scenario, optimization = setup
+
+    option = optimization.recommended
+
+    assert option is not None
+
+    result = (
+        validate_recovery_option_from_context(
+            context=context,
+            base_scenario=scenario,
+            option=option,
+            plan_name="Balanced",
+            cash_floor=20000.0,
+            max_shortfall_probability=0.05,
+        )
+    )
+
+    assert (
+        result.risk_adjusted_total_liquidity
+        >= option.external_liquidity
+    )
+
+    assert (
+        result.risk_adjusted_breach_probability
+        <= 0.051
+    )
+
+    assert (
+        result.risk_adjusted_within_appetite
+        is True
+    )
