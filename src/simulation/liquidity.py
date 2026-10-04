@@ -49,6 +49,11 @@ class SimulationInput(BaseModel):
 
     cash_floor: float = 0.0
 
+    initial_liquidity_injection: float = Field(
+        default=0.0,
+        ge=0.0,
+    )
+
     confidence_level: float = Field(
         default=0.95,
         gt=0.5,
@@ -234,6 +239,7 @@ def simulate_liquidity_from_context(
 
     cash_paths = (
         context.starting_cash
+        + config.initial_liquidity_injection
         + np.cumsum(
             net_cash_flows,
             axis=1,
