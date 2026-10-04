@@ -30,6 +30,10 @@ from src.scenarios.engine import (
 from src.scenarios.recovery import (
     build_recovery_plan_from_context,
 )
+from src.scenarios.recovery_optimizer import (
+    RecoveryOptimizerConfig,
+    optimize_recovery_from_context,
+)
 from src.scenarios.reverse_stress import (
     ReverseStressConfig,
     reverse_stress_from_context,
@@ -1242,6 +1246,25 @@ if page == "Stress Lab":
                 )
             )
 
+            recovery_decision = (
+                optimize_recovery_from_context(
+                    stress_scenario_context,
+                    scenario,
+                    RecoveryOptimizerConfig(
+                        target_min_cash=(
+                            risk_policy.minimum_cash_reserve
+                        ),
+                        max_revenue_improvement_pct=20,
+                        max_cost_reduction_pct=15,
+                        max_receivable_acceleration_days=90,
+                        max_external_liquidity=50000.0,
+                        revenue_step_pct=1,
+                        cost_step_pct=1,
+                        receivable_step_days=1,
+                    ),
+                )
+            )
+
         st.session_state["scenario_result"] = (
             scenario_result
         )
@@ -1252,6 +1275,10 @@ if page == "Stress Lab":
 
         st.session_state["recovery"] = (
             recovery
+        )
+
+        st.session_state["recovery_decision"] = (
+            recovery_decision
         )
 
     if "scenario_result" in st.session_state:
@@ -1266,6 +1293,10 @@ if page == "Stress Lab":
         recovery = st.session_state[
             "recovery"
         ]
+
+        recovery_decision = st.session_state.get(
+            "recovery_decision"
+        )
 
         st.markdown("### Stress result")
 
@@ -1459,7 +1490,287 @@ if page == "Stress Lab":
                 use_container_width=True,
             )
 
-        st.markdown("### Recovery Optimizer")
+        # ==========================================================
+        # RECOVERY DECISION CENTER V2
+        # ==========================================================
+
+        st.markdown("### Recovery Decision Center")
+
+        st.write(
+            "RiskPilot searches thousands of feasible recovery "
+            "combinations and compares the trade-off between "
+            "operating intervention and external liquidity."
+        )
+
+        if recovery_decision is not None:
+
+            dc1, dc2, dc3 = st.columns(3)
+
+            dc1.metric(
+                "Stressed reserve gap",
+                money(
+                    recovery_decision.initial_reserve_gap
+                ),
+                help=(
+                    "Additional cash required to restore the "
+                    "management reserve before recovery actions."
+                ),
+            )
+
+            dc2.metric(
+                "Candidates evaluated",
+                f"{recovery_decision.candidates_evaluated:,}",
+            )
+
+            dc3.metric(
+                "Recovery available",
+                (
+                    "YES"
+                    if recovery_decision.feasible
+                    else "NO"
+                ),
+            )
+
+            if recovery_decision.feasible:
+
+                balanced = (
+                    recovery_decision.recommended
+                )
+
+                lowest_funding = (
+                    recovery_decision
+                    .lowest_external_liquidity
+                )
+
+                lowest_disruption = (
+                    recovery_decision
+                    .lowest_operational_disruption
+                )
+
+                plan_columns = st.columns(3)
+
+                def render_plan(
+                    column,
+                    title,
+                    option,
+                    description,
+                ):
+                    with column:
+                        with st.container(
+                            border=True
+                        ):
+                            st.markdown(
+                                f"#### {title}"
+                            )
+
+                            st.caption(
+                                description
+                            )
+
+                            if option is None:
+                                st.warning(
+                                    "No feasible plan found."
+                                )
+                                return
+
+                            st.metric(
+                                "External liquidity",
+                                money(
+                                    option
+                                    .external_liquidity
+                                ),
+                            )
+
+                            st.metric(
+                                "Resulting minimum cash",
+                                money(
+                                    option
+                                    .resulting_min_cash
+                                ),
+                            )
+
+                            st.metric(
+                                "Maximum lever use",
+                                (
+                                    f"{option.maximum_lever_utilisation:.1%}"
+                                ),
+                            )
+
+                            st.markdown(
+                                "**Recovery actions**"
+                            )
+
+                            st.write(
+                                "Revenue recovery: "
+                                f"**{option.revenue_improvement_pct:.0f}%**"
+                            )
+
+                            st.write(
+                                "Cost reduction: "
+                                f"**{option.cost_reduction_pct:.0f}%**"
+                            )
+
+                            st.write(
+                                "Collections faster: "
+                                f"**{option.receivable_acceleration_days} days**"
+                            )
+
+                            st.caption(
+                                "Deterministic reserve margin: "
+                                f"{money(option.reserve_margin)}"
+                            )
+
+                render_plan(
+                    plan_columns[0],
+                    "Balanced",
+                    balanced,
+                    (
+                        "Minimises dependence on any "
+                        "single recovery lever."
+                    ),
+                )
+
+                render_plan(
+                    plan_columns[1],
+                    "Lowest Funding",
+                    lowest_funding,
+                    (
+                        "Minimises the amount of external "
+                        "liquidity required."
+                    ),
+                )
+
+                render_plan(
+                    plan_columns[2],
+                    "Lowest Operational Disruption",
+                    lowest_disruption,
+                    (
+                        "Minimises changes to revenue, "
+                        "costs and collections."
+                    ),
+                )
+
+                # --------------------------------------------------
+                # Management trade-off comparison
+                # --------------------------------------------------
+
+                st.markdown(
+                    "#### Management trade-offs"
+                )
+
+                tradeoff_options = [
+                    (
+                        "Balanced",
+                        recovery_decision.recommended,
+                    ),
+                    (
+                        "Lowest Funding",
+                        recovery_decision
+                        .lowest_external_liquidity,
+                    ),
+                    (
+                        "Lowest Operational Disruption",
+                        recovery_decision
+                        .lowest_operational_disruption,
+                    ),
+                    (
+                        "No External Funding",
+                        recovery_decision
+                        .no_external_liquidity,
+                    ),
+                ]
+
+                tradeoff_rows = []
+
+                for (
+                    plan_name,
+                    option,
+                ) in tradeoff_options:
+
+                    if option is None:
+                        continue
+
+                    tradeoff_rows.append(
+                        {
+                            "Plan": plan_name,
+                            "Revenue recovery":
+                                (
+                                    f"{option.revenue_improvement_pct:.0f}%"
+                                ),
+                            "Cost reduction":
+                                (
+                                    f"{option.cost_reduction_pct:.0f}%"
+                                ),
+                            "Collections faster":
+                                (
+                                    f"{option.receivable_acceleration_days} days"
+                                ),
+                            "External liquidity":
+                                money(
+                                    option.external_liquidity
+                                ),
+                            "Min cash":
+                                money(
+                                    option.resulting_min_cash
+                                ),
+                            "Max lever use":
+                                (
+                                    f"{option.maximum_lever_utilisation:.1%}"
+                                ),
+                        }
+                    )
+
+                st.dataframe(
+                    pd.DataFrame(
+                        tradeoff_rows
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                if balanced is not None:
+                    st.success(
+                        "Balanced recommendation: combine "
+                        f"{balanced.revenue_improvement_pct:.0f}% "
+                        "revenue recovery, "
+                        f"{balanced.cost_reduction_pct:.0f}% "
+                        "cost reduction, "
+                        f"{balanced.receivable_acceleration_days} "
+                        "days faster collections and "
+                        f"{money(balanced.external_liquidity)} "
+                        "of external liquidity."
+                    )
+
+                st.warning(
+                    "Decision-model scope: these recovery plans "
+                    "restore the deterministic minimum-cash target. "
+                    "They have not yet been validated against the "
+                    f"{risk_policy.max_shortfall_probability:.1%} "
+                    "maximum acceptable reserve-breach probability."
+                )
+
+            else:
+                st.error(
+                    "No recovery combination within the configured "
+                    "operating and funding limits restores the "
+                    "management liquidity reserve."
+                )
+
+                best_effort = (
+                    recovery_decision.best_effort
+                )
+
+                st.write(
+                    "Best achievable minimum cash under the "
+                    "current limits: "
+                    f"**{money(best_effort.resulting_min_cash)}**"
+                )
+
+        st.divider()
+
+        st.markdown(
+            "### Recovery Diagnostics"
+        )
 
         if recovery.operational_recovery_possible:
             st.success(
