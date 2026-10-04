@@ -42,6 +42,7 @@ from src.simulation.recovery_validation import (
     validate_recovery_option_from_context,
 )
 from src.ui.liquidity import render_liquidity_risk
+from src.ui.ai_analyst import render_ai_risk_analyst
 
 
 st.set_page_config(
@@ -354,6 +355,7 @@ page = st.radio(
         "Forecast Intelligence",
         "Liquidity Risk",
         "Stress Lab",
+        "AI Risk Analyst",
         "Model & Data",
     ],
     horizontal=True,
@@ -2097,6 +2099,25 @@ if page == "Stress Lab":
                 use_container_width=True,
             )
 
+
+
+# =====================================================================
+# AI RISK ANALYST
+# =====================================================================
+
+if page == "AI Risk Analyst":
+    ai_forecast_context = get_forecast_context(
+        df,
+        horizon=3,
+    )
+
+    render_ai_risk_analyst(
+        dataframe=df,
+        policy=risk_policy,
+        forecast_context=ai_forecast_context,
+        metrics=metrics,
+        risks=risks,
+    )
 
 
 # =====================================================================
