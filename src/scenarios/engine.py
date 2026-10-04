@@ -7,6 +7,10 @@ from pydantic import BaseModel, Field
 import pandas as pd
 
 from src.forecasting.forecast import forecast_metric
+from src.core.context import (
+    ForecastContext,
+    build_forecast_context,
+)
 
 
 class ScenarioInput(BaseModel):
@@ -60,39 +64,52 @@ class ScenarioContext:
     baseline_cost: tuple[float, ...]
 
 
+def scenario_context_from_forecast_context(
+    context: ForecastContext,
+) -> ScenarioContext:
+    """
+    Convert the shared forecasting context into the
+    lightweight structure required by the scenario engine.
+    """
+    return ScenarioContext(
+        horizon=context.horizon,
+        starting_cash=context.starting_cash,
+        latest_receivables=context.latest_receivables,
+        baseline_revenue=tuple(
+            float(point.value)
+            for point
+            in context.revenue_forecast.forecasts
+        ),
+        baseline_cost=tuple(
+            float(point.value)
+            for point
+            in context.cost_forecast.forecasts
+        ),
+    )
+
+
 def prepare_scenario_context(
     df: pd.DataFrame,
     horizon: int,
 ) -> ScenarioContext:
-    if df.empty:
-        raise ValueError("Cannot prepare scenario context from empty data.")
+    """
+    Backwards-compatible wrapper.
 
-    revenue_forecast = forecast_metric(
-        df,
-        "revenue",
-        horizon=horizon,
+    Existing callers still work, while higher-level code
+    can prepare ForecastContext once and reuse it.
+    """
+    forecast_context = (
+        build_forecast_context(
+            df,
+            horizon,
+        )
     )
 
-    cost_forecast = forecast_metric(
-        df,
-        "operating_cost",
-        horizon=horizon,
+    return (
+        scenario_context_from_forecast_context(
+            forecast_context
+        )
     )
-
-    return ScenarioContext(
-        horizon=horizon,
-        starting_cash=float(df["cash_balance"].iloc[-1]),
-        latest_receivables=float(df["receivables"].iloc[-1]),
-        baseline_revenue=tuple(
-            float(point.value)
-            for point in revenue_forecast.forecasts
-        ),
-        baseline_cost=tuple(
-            float(point.value)
-            for point in cost_forecast.forecasts
-        ),
-    )
-
 
 def _estimate_runway(
     starting_cash: float,
