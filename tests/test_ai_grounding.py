@@ -261,3 +261,23 @@ def test_balanced_recovery_validation_reaches_appetite(
         ]
         <= 0.051
     )
+
+
+def test_business_health_runway_semantics_are_explicit(
+    context,
+):
+    snapshot = business_health_snapshot(
+        context
+    )
+
+    indicators = snapshot["indicators"]
+
+    assert (
+        "historical_run_rate_cash_runway_months"
+        in indicators
+    )
+
+    assert (
+        "cash_runway_months"
+        not in indicators
+    )

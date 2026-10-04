@@ -105,7 +105,7 @@ def business_health_snapshot(
                 _clean_number(
                     metrics.revenue_volatility
                 ),
-            "cash_runway_months":
+            "historical_run_rate_cash_runway_months":
                 _clean_number(
                     metrics.cash_runway_months
                 ),
@@ -526,8 +526,13 @@ def get_liquidity_risk(
     Get probabilistic liquidity risk using RiskPilot's
     paired historical forecast-error bootstrap.
 
-    Use this for reserve-breach probability, insolvency
+    Use this for reserve-breach probability, negative-cash
     probability, downside cash or liquidity-buffer questions.
+
+    This tool already returns the management cash reserve and
+    maximum acceptable breach probability, so it is sufficient
+    by itself for comparing reserve-breach risk with cash-negative
+    risk.
     """
 
     ctx.context.record_tool(
