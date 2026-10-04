@@ -16,7 +16,6 @@ from src.ingestion.validator import validate_business_data
 from src.scenarios.decomposition import decompose_scenario
 from src.scenarios.engine import ScenarioInput, run_scenario
 from src.scenarios.recovery import build_recovery_plan
-from src.ui.liquidity import render_liquidity_risk
 
 
 st.set_page_config(
@@ -163,27 +162,12 @@ source = st.sidebar.radio(
 
 try:
     if source == "Demo business":
-        demo_name = st.sidebar.selectbox(
-            "Demo profile",
-            [
-                "Borderline Business",
-                "Fragile Business",
-            ],
-        )
-
-        demo_paths = {
-            "Borderline Business":
-                "data/demo/borderline_business.csv",
-            "Fragile Business":
-                "data/demo/fragile_business.csv",
-        }
-
         raw_df = load_business_csv(
-            demo_paths[demo_name]
+            "data/demo/fragile_business.csv"
         )
 
         st.sidebar.success(
-            f"Demo loaded: {demo_name}"
+            "Demo loaded: Fragile Business"
         )
 
     else:
@@ -279,17 +263,10 @@ st.caption(
 )
 
 
-(
-    command_tab,
-    forecast_tab,
-    liquidity_tab,
-    stress_tab,
-    diagnostics_tab,
-) = st.tabs(
+command_tab, forecast_tab, stress_tab, diagnostics_tab = st.tabs(
     [
         "Command Center",
         "Forecast Intelligence",
-        "Liquidity Risk",
         "Stress Lab",
         "Model & Data",
     ]
@@ -734,14 +711,6 @@ with forecast_tab:
             "compare candidate forecasting models before "
             "selecting the champion model."
         )
-
-
-# =====================================================================
-# PROBABILISTIC LIQUIDITY RISK
-# =====================================================================
-
-with liquidity_tab:
-    render_liquidity_risk(df)
 
 
 # =====================================================================

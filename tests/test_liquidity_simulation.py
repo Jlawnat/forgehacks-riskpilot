@@ -183,3 +183,58 @@ def test_simulation_returns_requested_path_count():
     assert len(
         result.cash_path_quantiles
     ) == 4
+
+
+def test_borderline_demo_has_non_degenerate_risk():
+    raw = load_business_csv(
+        "data/demo/borderline_business.csv"
+    )
+
+    df, _ = validate_business_data(raw)
+
+    result = simulate_liquidity(
+        df,
+        SimulationInput(
+            horizon=3,
+            simulations=5000,
+            seed=42,
+        ),
+    )
+
+    assert 0.05 < result.shortfall_probability < 0.95
+
+
+def test_borderline_severe_scenario_materially_worsens_risk():
+    raw = load_business_csv(
+        "data/demo/borderline_business.csv"
+    )
+
+    df, _ = validate_business_data(raw)
+
+    baseline = simulate_liquidity(
+        df,
+        SimulationInput(
+            horizon=3,
+            simulations=5000,
+            seed=42,
+        ),
+    )
+
+    severe = simulate_liquidity(
+        df,
+        SimulationInput(
+            revenue_change=-0.15,
+            cost_change=0.10,
+            receivable_delay_days=30,
+            horizon=3,
+            simulations=5000,
+            seed=42,
+        ),
+    )
+
+    assert severe.shortfall_probability > baseline.shortfall_probability
+
+    assert (
+        severe.liquidity_buffer_at_confidence
+        > baseline.liquidity_buffer_at_confidence
+    )
