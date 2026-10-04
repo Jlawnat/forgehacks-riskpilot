@@ -2207,13 +2207,26 @@ Deterministic financial health metrics
     ↓
 Rolling forecast model validation
     ↓
-Champion forecast + uncertainty interval
+Champion revenue + cost forecasts
+with uncertainty intervals
     ↓
-Scenario stress engine
+Management risk appetite
+liquidity reserve + breach tolerance
     ↓
-Liquidity timing decomposition
+Paired-residual Monte Carlo
+liquidity simulation
     ↓
-Constrained recovery optimization
+Forward stress testing
++ liquidity-driver decomposition
+    ↓
+Reverse stress testing
++ survival boundary
+    ↓
+Recovery decision optimisation
+across operating + funding levers
+    ↓
+Probabilistic recovery validation
+against management risk appetite
     ↓
 AI Risk Analyst  ← next layer
         """.strip(),
@@ -2221,8 +2234,8 @@ AI Risk Analyst  ← next layer
     )
 
     st.caption(
-        "Financial calculations and scenario outputs are "
-        "computed deterministically in Python. "
-        "The AI layer will interpret these verified outputs "
-        "rather than inventing financial values."
+        "Forecasting, simulation, stress testing and recovery "
+        "calculations are performed by verified Python engines. "
+        "The AI Risk Analyst will use these structured outputs "
+        "as evidence rather than generating financial values itself."
     )
