@@ -154,12 +154,6 @@ def risk_class(level: str) -> str:
     return f"risk-{level.lower()}"
 
 
-def risk_numeric(level: str) -> int:
-    return {
-        "low": 25,
-        "medium": 55,
-        "high": 85,
-    }[level]
 
 
 def card(label: str, value: str, extra: str = "") -> None:
@@ -494,44 +488,65 @@ if page == "Command Center":
     left, right = st.columns([1.05, 1])
 
     with left:
-        st.markdown("### Risk map")
+        st.markdown("### Risk indicators")
 
-        dimension_levels = {
-            "Liquidity": risks.liquidity_risk,
-            "Revenue": risks.revenue_risk,
-            "Cost pressure": risks.cost_pressure_risk,
-            "Receivables": risks.receivables_risk,
-        }
-
-        risk_chart = go.Figure(
-            go.Bar(
-                x=[
-                    risk_numeric(level)
-                    for level in dimension_levels.values()
-                ],
-                y=list(dimension_levels.keys()),
-                orientation="h",
-                text=[
-                    level.upper()
-                    for level in dimension_levels.values()
-                ],
-                textposition="inside",
-            )
+        current_receivable_ratio = (
+            metrics.latest_receivables
+            / metrics.latest_revenue
+            if metrics.latest_revenue > 0
+            else None
         )
 
-        risk_chart.update_layout(
-            xaxis=dict(
-                title="Risk intensity",
-                range=[0, 100],
-            ),
-            yaxis_title="",
-            height=310,
-            margin=dict(l=10, r=10, t=20, b=30),
-        )
+        risk_rows = [
+            {
+                "Dimension": "Liquidity",
+                "Status": risks.liquidity_risk.upper(),
+                "Observed indicator": (
+                    f"{metrics.cash_runway_months:.1f} months runway"
+                    if metrics.cash_runway_months is not None
+                    else "Unavailable"
+                ),
+            },
+            {
+                "Dimension": "Revenue",
+                "Status": risks.revenue_risk.upper(),
+                "Observed indicator": (
+                    f"{metrics.revenue_growth:.1%} recent growth"
+                    if metrics.revenue_growth is not None
+                    else "Unavailable"
+                ),
+            },
+            {
+                "Dimension": "Cost pressure",
+                "Status": risks.cost_pressure_risk.upper(),
+                "Observed indicator": (
+                    f"{metrics.cost_to_revenue_ratio:.2f}× cost / revenue"
+                    if metrics.cost_to_revenue_ratio is not None
+                    else "Unavailable"
+                ),
+            },
+            {
+                "Dimension": "Receivables",
+                "Status": risks.receivables_risk.upper(),
+                "Observed indicator": (
+                    f"{current_receivable_ratio:.2f}× receivables / revenue"
+                    if current_receivable_ratio is not None
+                    else "Unavailable"
+                ),
+            },
+        ]
 
-        st.plotly_chart(
-            risk_chart,
+        st.dataframe(
+            pd.DataFrame(risk_rows),
+            hide_index=True,
             use_container_width=True,
+        )
+
+        st.caption(
+            "Risk statuses are categorical assessments derived "
+            "from the observed business metrics shown above. "
+            "RiskPilot does not convert these categories into "
+            "arbitrary numerical intensity scores."
         )
 
     with right:
@@ -752,100 +767,124 @@ if page == "Forecast Intelligence":
 
         st.markdown("### Actual + forecast")
 
-        historical_labels = [
-            value.strftime("%Y-%m")
-            for value in df["date"].tail(8)
-        ]
+        historical_df = (
+            df[["date", "revenue"]]
+            .tail(8)
+            .copy()
+        )
 
-        future_labels = [
-            f"F+{point.period}"
+        historical_df["date"] = pd.to_datetime(
+            historical_df["date"]
+        )
+
+        last_observed_date = pd.to_datetime(
+            df["date"].max()
+        )
+
+        last_observed_revenue = float(
+            df.loc[
+                df["date"] == df["date"].max(),
+                "revenue",
+            ].iloc[-1]
+        )
+
+        future_dates = [
+            last_observed_date
+            + pd.DateOffset(
+                months=int(point.period)
+            )
             for point in revenue_forecast.forecasts
         ]
 
-        x_values = (
-            historical_labels
-            + future_labels
-        )
+        forecast_values = [
+            float(point.value)
+            for point in revenue_forecast.forecasts
+        ]
 
-        historical_values = list(
-            df["revenue"].tail(8).astype(float)
-        )
+        lower_values = [
+            float(point.lower)
+            for point in revenue_forecast.forecasts
+        ]
 
-        actual_series = (
-            historical_values
-            + [None] * len(future_labels)
-        )
-
-        forecast_series = (
-            [None] * (len(historical_values) - 1)
-            + [historical_values[-1]]
-            + [
-                point.value
-                for point in revenue_forecast.forecasts
-            ]
-        )
-
-        lower_series = (
-            [None] * len(historical_values)
-            + [
-                point.lower
-                for point in revenue_forecast.forecasts
-            ]
-        )
-
-        upper_series = (
-            [None] * len(historical_values)
-            + [
-                point.upper
-                for point in revenue_forecast.forecasts
-            ]
-        )
+        upper_values = [
+            float(point.upper)
+            for point in revenue_forecast.forecasts
+        ]
 
         forecast_fig = go.Figure()
 
         forecast_fig.add_trace(
             go.Scatter(
-                x=x_values,
-                y=actual_series,
+                x=historical_df["date"],
+                y=historical_df["revenue"],
                 mode="lines+markers",
                 name="Observed revenue",
             )
         )
 
+        # Upper bound first, then lower bound fills back to it.
         forecast_fig.add_trace(
             go.Scatter(
-                x=x_values,
-                y=upper_series,
+                x=future_dates,
+                y=upper_values,
                 mode="lines",
                 line=dict(width=0),
                 showlegend=False,
+                hoverinfo="skip",
             )
         )
 
         forecast_fig.add_trace(
             go.Scatter(
-                x=x_values,
-                y=lower_series,
+                x=future_dates,
+                y=lower_values,
                 mode="lines",
                 fill="tonexty",
-                name="Forecast uncertainty",
+                name="Forecast interval",
+                hovertemplate=(
+                    "Date: %{x|%b %Y}"
+                    "<br>Lower bound: $%{y:,.0f}"
+                    "<extra></extra>"
+                ),
             )
         )
 
         forecast_fig.add_trace(
             go.Scatter(
-                x=x_values,
-                y=forecast_series,
+                x=[
+                    last_observed_date,
+                    *future_dates,
+                ],
+                y=[
+                    last_observed_revenue,
+                    *forecast_values,
+                ],
                 mode="lines+markers",
-                name="Selected-model forecast",
+                name="Forecast revenue",
+                line=dict(
+                    dash="dash",
+                ),
+                hovertemplate=(
+                    "Date: %{x|%b %Y}"
+                    "<br>Revenue: $%{y:,.0f}"
+                    "<extra></extra>"
+                ),
             )
         )
 
+        if future_dates:
+            forecast_fig.add_vline(
+                x=future_dates[0],
+                line_dash="dot",
+                annotation_text="Forecast begins",
+                annotation_position="top",
+            )
+
         forecast_fig.update_layout(
-            hovermode="x unified",
+            xaxis_title="Date",
             yaxis_title="Revenue",
-            xaxis_title="Observed → forecast periods",
-            height=470,
+            hovermode="x unified",
+            height=460,
         )
 
         st.plotly_chart(
@@ -853,16 +892,19 @@ if page == "Forecast Intelligence":
             use_container_width=True,
         )
 
-        st.info(
-            "RiskPilot uses rolling one-step validation to "
-            "compare candidate forecasting models before "
-            "selecting the champion model."
-        )
+        if future_dates:
+            st.caption(
+                "Observed data end "
+                f"{last_observed_date.strftime('%b %Y')}. "
+                "Forecast periods correspond to "
+                + ", ".join(
+                    value.strftime("%b %Y")
+                    for value in future_dates
+                )
+                + ". The shaded region represents the "
+                "model uncertainty interval."
+            )
 
-
-# =====================================================================
-# PROBABILISTIC LIQUIDITY RISK
-# =====================================================================
 
 if page == "Liquidity Risk":
     liquidity_context = (
@@ -1824,12 +1866,12 @@ if page == "Stress Lab":
                             f"{balanced.receivable_acceleration_days} "
                             "days faster collections. "
                             f"Deterministic funding is "
-                            f"{money(balanced.external_liquidity)}; "
+                            f"\\{money(balanced.external_liquidity)}; "
                             "after adding the "
-                            f"{money(balanced_validation.additional_buffer_required)} "
+                            f"\\{money(balanced_validation.additional_buffer_required)} "
                             "uncertainty buffer, total risk-adjusted "
                             "liquidity is "
-                            f"{money(balanced_validation.risk_adjusted_total_liquidity)}, "
+                            f"\\{money(balanced_validation.risk_adjusted_total_liquidity)}, "
                             "bringing modeled reserve-breach risk to "
                             f"{balanced_validation.risk_adjusted_breach_probability:.1%}."
                         )
@@ -1950,104 +1992,111 @@ if page == "Stress Lab":
 
         st.divider()
 
-        st.markdown(
-            "### Recovery Diagnostics"
-        )
-
-        if recovery.operational_recovery_possible:
-            st.success(
-                "A practical operating response can "
-                "restore the cash target."
-            )
-        else:
-            st.warning(
-                "Operating changes within practical limits "
-                "are not enough to fully restore liquidity."
+        with st.expander(
+            "Detailed recovery diagnostics",
+            expanded=False,
+        ):
+            st.caption(
+                "Legacy operating-recovery diagnostics retained "
+                "for transparency and comparison with the newer "
+                "Recovery Decision Center."
             )
 
-        best_mix = next(
-            (
-                action
-                for action in recovery.actions
-                if action.action
-                == "best_operating_mix"
-            ),
-            None,
-        )
+            if recovery.operational_recovery_possible:
+                st.success(
+                    "A practical operating response can "
+                    "restore the cash target."
+                )
+            else:
+                st.warning(
+                    "Operating changes within practical limits "
+                    "are not enough to fully restore liquidity."
+                )
 
-        liquidity = next(
-            (
-                action
-                for action in recovery.actions
-                if action.action
-                == "liquidity_buffer"
-            ),
-            None,
-        )
-
-        if best_mix is not None:
-            b1, b2, b3 = st.columns(3)
-
-            b1.metric(
-                "Revenue improvement",
+            best_mix = next(
                 (
-                    f"{best_mix.components.get('revenue_improvement_pct', 0):.0f}%"
+                    action
+                    for action in recovery.actions
+                    if action.action
+                    == "best_operating_mix"
                 ),
+                None,
             )
 
-            b2.metric(
-                "Cost reduction",
+            liquidity = next(
                 (
-                    f"{best_mix.components.get('cost_reduction_pct', 0):.0f}%"
+                    action
+                    for action in recovery.actions
+                    if action.action
+                    == "liquidity_buffer"
                 ),
+                None,
             )
 
-            b3.metric(
-                "Collections accelerated",
-                (
-                    f"{best_mix.components.get('receivable_days_faster', 0):.0f} days"
-                ),
+            if best_mix is not None:
+                b1, b2, b3 = st.columns(3)
+
+                b1.metric(
+                    "Revenue improvement",
+                    (
+                        f"{best_mix.components.get('revenue_improvement_pct', 0):.0f}%"
+                    ),
+                )
+
+                b2.metric(
+                    "Cost reduction",
+                    (
+                        f"{best_mix.components.get('cost_reduction_pct', 0):.0f}%"
+                    ),
+                )
+
+                b3.metric(
+                    "Collections accelerated",
+                    (
+                        f"{best_mix.components.get('receivable_days_faster', 0):.0f} days"
+                    ),
+                )
+
+                st.info(best_mix.explanation)
+
+            if liquidity is not None:
+                st.error(
+                    "Remaining external liquidity required: "
+                    f"**{money(liquidity.magnitude)}**"
+                )
+
+            recovery_rows = []
+
+            for action in recovery.actions:
+                recovery_rows.append(
+                    {
+                        "Strategy":
+                            action.action.replace(
+                                "_",
+                                " ",
+                            ).title(),
+                        "Feasible":
+                            "YES"
+                            if action.feasible
+                            else "NO",
+                        "Magnitude":
+                            (
+                                f"{action.magnitude:,.1f} "
+                                f"{action.unit}"
+                                if action.magnitude is not None
+                                else "—"
+                            ),
+                        "Outcome":
+                            action.explanation,
+                    }
+                )
+
+            st.dataframe(
+                pd.DataFrame(recovery_rows),
+                hide_index=True,
+                use_container_width=True,
             )
 
-            st.info(best_mix.explanation)
-
-        if liquidity is not None:
-            st.error(
-                "Remaining external liquidity required: "
-                f"**{money(liquidity.magnitude)}**"
-            )
-
-        recovery_rows = []
-
-        for action in recovery.actions:
-            recovery_rows.append(
-                {
-                    "Strategy":
-                        action.action.replace(
-                            "_",
-                            " ",
-                        ).title(),
-                    "Feasible":
-                        "YES"
-                        if action.feasible
-                        else "NO",
-                    "Magnitude":
-                        (
-                            f"{action.magnitude:,.1f} "
-                            f"{action.unit}"
-                            if action.magnitude is not None
-                            else "—"
-                        ),
-                    "Outcome":
-                        action.explanation,
-                }
-            )
-
-        st.dataframe(
-            pd.DataFrame(recovery_rows),
-            hide_index=True,
-            use_container_width=True,
-        )
 
 
 # =====================================================================
