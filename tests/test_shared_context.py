@@ -227,3 +227,133 @@ def test_multiple_simulations_share_one_context():
         results[0]
         .median_end_cash
     )
+
+
+def test_context_decomposition_matches_standard_path():
+    from src.scenarios.decomposition import (
+        decompose_scenario,
+        decompose_scenario_from_context,
+    )
+
+    df = _load_demo()
+
+    scenario = ScenarioInput(
+        revenue_change=-0.15,
+        cost_change=0.10,
+        receivable_delay_days=30,
+        horizon=3,
+    )
+
+    standard = decompose_scenario(
+        df,
+        scenario,
+    )
+
+    forecast_context = (
+        build_forecast_context(
+            df,
+            horizon=3,
+        )
+    )
+
+    scenario_context = (
+        scenario_context_from_forecast_context(
+            forecast_context
+        )
+    )
+
+    shared = (
+        decompose_scenario_from_context(
+            scenario_context,
+            scenario,
+        )
+    )
+
+    assert (
+        standard.peak_liquidity_gap
+        == shared.peak_liquidity_gap
+    )
+
+    assert (
+        standard.total_end_cash_impact
+        == shared.total_end_cash_impact
+    )
+
+
+def test_context_recovery_matches_standard_path():
+    from src.scenarios.recovery import (
+        build_recovery_plan,
+        build_recovery_plan_from_context,
+    )
+
+    df = _load_demo()
+
+    scenario = ScenarioInput(
+        revenue_change=-0.15,
+        cost_change=0.10,
+        receivable_delay_days=30,
+        horizon=3,
+    )
+
+    standard = build_recovery_plan(
+        df,
+        scenario,
+    )
+
+    forecast_context = (
+        build_forecast_context(
+            df,
+            horizon=3,
+        )
+    )
+
+    scenario_context = (
+        scenario_context_from_forecast_context(
+            forecast_context
+        )
+    )
+
+    shared = (
+        build_recovery_plan_from_context(
+            scenario_context,
+            scenario,
+        )
+    )
+
+    assert (
+        standard
+        .operational_recovery_possible
+        ==
+        shared
+        .operational_recovery_possible
+    )
+
+    assert (
+        standard.stressed_min_cash
+        == shared.stressed_min_cash
+    )
+
+    standard_buffer = next(
+        (
+            item.magnitude
+            for item in standard.actions
+            if item.action
+            == "liquidity_buffer"
+        ),
+        None,
+    )
+
+    shared_buffer = next(
+        (
+            item.magnitude
+            for item in shared.actions
+            if item.action
+            == "liquidity_buffer"
+        ),
+        None,
+    )
+
+    assert (
+        standard_buffer
+        == shared_buffer
+    )

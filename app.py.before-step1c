@@ -6,7 +6,6 @@ import streamlit as st
 
 from src.analytics.metrics import calculate_business_metrics
 from src.analytics.risk import assess_business_risk
-from src.core.context import build_forecast_context
 from src.forecasting.forecast import forecast_metric
 from src.forecasting.validation import evaluate_models
 from src.ingestion.loader import (
@@ -14,17 +13,9 @@ from src.ingestion.loader import (
     normalize_business_dataframe,
 )
 from src.ingestion.validator import validate_business_data
-from src.scenarios.decomposition import (
-    decompose_scenario_from_context,
-)
-from src.scenarios.engine import (
-    ScenarioInput,
-    run_scenario_from_context,
-    scenario_context_from_forecast_context,
-)
-from src.scenarios.recovery import (
-    build_recovery_plan_from_context,
-)
+from src.scenarios.decomposition import decompose_scenario
+from src.scenarios.engine import ScenarioInput, run_scenario
+from src.scenarios.recovery import build_recovery_plan
 from src.ui.liquidity import render_liquidity_risk
 
 
@@ -159,27 +150,6 @@ def card(label: str, value: str, extra: str = "") -> None:
     )
 
 
-@st.cache_data(
-    show_spinner=False,
-)
-def get_forecast_context(
-    dataframe: pd.DataFrame,
-    horizon: int,
-):
-    """
-    Cached expensive model preparation.
-
-    The same validated dataset + horizon reuses:
-    - model validation
-    - champion forecasts
-    - paired residuals
-    """
-    return build_forecast_context(
-        dataframe,
-        horizon=horizon,
-    )
-
-
 # ---------------------------------------------------------------------
 # DATA INPUT
 # ---------------------------------------------------------------------
@@ -246,6 +216,46 @@ risks = assess_business_risk(metrics)
 
 
 # ---------------------------------------------------------------------
+# PRECOMPUTE FORECAST INTELLIGENCE
+# ---------------------------------------------------------------------
+
+revenue_forecast = None
+cost_forecast = None
+revenue_scores = []
+
+try:
+    revenue_forecast = forecast_metric(
+        df,
+        "revenue",
+        horizon=3,
+    )
+
+    cost_forecast = forecast_metric(
+        df,
+        "operating_cost",
+        horizon=3,
+    )
+
+    revenue_scores = evaluate_models(
+        df["revenue"].astype(float)
+    )
+
+except Exception:
+    pass
+
+
+baseline_outlook = None
+
+try:
+    baseline_outlook = run_scenario(
+        df,
+        ScenarioInput(horizon=6),
+    )
+except Exception:
+    pass
+
+
+# ---------------------------------------------------------------------
 # HERO
 # ---------------------------------------------------------------------
 
@@ -269,17 +279,20 @@ st.caption(
 )
 
 
-page = st.radio(
-    "Navigation",
+(
+    command_tab,
+    forecast_tab,
+    liquidity_tab,
+    stress_tab,
+    diagnostics_tab,
+) = st.tabs(
     [
         "Command Center",
         "Forecast Intelligence",
         "Liquidity Risk",
         "Stress Lab",
         "Model & Data",
-    ],
-    horizontal=True,
-    label_visibility="collapsed",
+    ]
 )
 
 
@@ -287,35 +300,7 @@ page = st.radio(
 # COMMAND CENTER
 # =====================================================================
 
-if page == "Command Center":
-    command_context = get_forecast_context(
-        df,
-        horizon=6,
-    )
-
-    revenue_forecast = (
-        command_context.revenue_forecast
-    )
-
-    revenue_scores = list(
-        command_context.revenue_scores
-    )
-
-    command_scenario_context = (
-        scenario_context_from_forecast_context(
-            command_context
-        )
-    )
-
-    baseline_outlook = (
-        run_scenario_from_context(
-            command_scenario_context,
-            ScenarioInput(
-                horizon=6,
-            ),
-        )
-    )
-
+with command_tab:
     st.subheader("Executive Risk Command Center")
 
     failure_period = (
@@ -553,24 +538,7 @@ if page == "Command Center":
 # FORECAST INTELLIGENCE
 # =====================================================================
 
-if page == "Forecast Intelligence":
-    forecast_context = get_forecast_context(
-        df,
-        horizon=3,
-    )
-
-    revenue_forecast = (
-        forecast_context.revenue_forecast
-    )
-
-    cost_forecast = (
-        forecast_context.cost_forecast
-    )
-
-    revenue_scores = list(
-        forecast_context.revenue_scores
-    )
-
+with forecast_tab:
     st.subheader("Forecast Intelligence")
 
     if revenue_forecast is None:
@@ -772,24 +740,15 @@ if page == "Forecast Intelligence":
 # PROBABILISTIC LIQUIDITY RISK
 # =====================================================================
 
-if page == "Liquidity Risk":
-    liquidity_context = (
-        get_forecast_context(
-            df,
-            horizon=3,
-        )
-    )
-
-    render_liquidity_risk(
-        liquidity_context
-    )
+with liquidity_tab:
+    render_liquidity_risk(df)
 
 
 # =====================================================================
 # STRESS LAB
 # =====================================================================
 
-if page == "Stress Lab":
+with stress_tab:
     st.subheader("Stress Lab")
 
     st.write(
@@ -863,39 +822,20 @@ if page == "Stress Lab":
                 horizon=horizon,
             )
 
-            stress_context = (
-                get_forecast_context(
-                    df,
-                    horizon=horizon,
-                )
+            scenario_result = run_scenario(
+                df,
+                scenario,
             )
 
-            stress_scenario_context = (
-                scenario_context_from_forecast_context(
-                    stress_context
-                )
+            decomposition = decompose_scenario(
+                df,
+                scenario,
             )
 
-            scenario_result = (
-                run_scenario_from_context(
-                    stress_scenario_context,
-                    scenario,
-                )
-            )
-
-            decomposition = (
-                decompose_scenario_from_context(
-                    stress_scenario_context,
-                    scenario,
-                )
-            )
-
-            recovery = (
-                build_recovery_plan_from_context(
-                    stress_scenario_context,
-                    scenario,
-                    target_min_cash=0,
-                )
+            recovery = build_recovery_plan(
+                df,
+                scenario,
+                target_min_cash=0,
             )
 
         st.session_state["scenario_result"] = (
@@ -1217,7 +1157,7 @@ if page == "Stress Lab":
 # MODEL & DATA DIAGNOSTICS
 # =====================================================================
 
-if page == "Model & Data":
+with diagnostics_tab:
     st.subheader("Model & Data Diagnostics")
 
     d1, d2, d3, d4 = st.columns(4)

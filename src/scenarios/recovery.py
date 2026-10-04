@@ -357,38 +357,67 @@ def _best_operating_mix(
     return action, min_cash
 
 
-def build_recovery_plan(
-    df: pd.DataFrame,
+def build_recovery_plan_from_context(
+    context: ScenarioContext,
     stressed_scenario: ScenarioInput,
     target_min_cash: float = 0.0,
 ) -> RecoveryPlan:
-    context = prepare_scenario_context(
-        df,
-        stressed_scenario.horizon,
-    )
+    """
+    Build recovery recommendations without re-fitting
+    any forecasting models.
+    """
+
+    if (
+        context.horizon
+        != stressed_scenario.horizon
+    ):
+        raise ValueError(
+            "Scenario horizon does not match "
+            "prepared context."
+        )
 
     stressed = run_scenario_from_context(
         context,
         stressed_scenario,
     )
 
-    if stressed.stressed_min_cash >= target_min_cash:
+    if (
+        stressed.stressed_min_cash
+        >= target_min_cash
+    ):
         return RecoveryPlan(
-            target_min_cash=target_min_cash,
-            stressed_min_cash=stressed.stressed_min_cash,
-            stressed_end_cash=stressed.stressed_end_cash,
+            target_min_cash=(
+                target_min_cash
+            ),
+            stressed_min_cash=(
+                stressed
+                .stressed_min_cash
+            ),
+            stressed_end_cash=(
+                stressed
+                .stressed_end_cash
+            ),
             operational_recovery_possible=True,
             actions=[
                 RecoveryAction(
-                    action="no_action_required",
+                    action=(
+                        "no_action_required"
+                    ),
                     feasible=True,
                     magnitude=0.0,
                     unit="none",
-                    resulting_min_cash=stressed.stressed_min_cash,
-                    resulting_end_cash=stressed.stressed_end_cash,
+                    resulting_min_cash=(
+                        stressed
+                        .stressed_min_cash
+                    ),
+                    resulting_end_cash=(
+                        stressed
+                        .stressed_end_cash
+                    ),
                     explanation=(
-                        "The scenario already satisfies the "
-                        "selected cash target."
+                        "The scenario already "
+                        "satisfies the selected "
+                        "cash target."
                     ),
                 )
             ],
@@ -412,7 +441,10 @@ def build_recovery_plan(
         target_min_cash,
     )
 
-    operating_mix, best_min_cash = _best_operating_mix(
+    (
+        operating_mix,
+        best_min_cash,
+    ) = _best_operating_mix(
         context,
         stressed_scenario,
         target_min_cash,
@@ -425,51 +457,97 @@ def build_recovery_plan(
         operating_mix,
     ]
 
-    operational_recovery_possible = operating_mix.feasible
+    operational_recovery_possible = (
+        operating_mix.feasible
+    )
 
     if not operational_recovery_possible:
         required_buffer = max(
             0.0,
-            target_min_cash - best_min_cash,
+            target_min_cash
+            - best_min_cash,
         )
 
         actions.append(
             RecoveryAction(
                 action="liquidity_buffer",
                 feasible=True,
-                magnitude=float(required_buffer),
+                magnitude=float(
+                    required_buffer
+                ),
                 unit="currency",
                 resulting_min_cash=float(
-                    best_min_cash + required_buffer
+                    best_min_cash
+                    + required_buffer
                 ),
                 resulting_end_cash=(
                     None
-                    if operating_mix.resulting_end_cash is None
+                    if operating_mix
+                    .resulting_end_cash
+                    is None
                     else float(
-                        operating_mix.resulting_end_cash
+                        operating_mix
+                        .resulting_end_cash
                         + required_buffer
                     )
                 ),
                 components={
                     "required_liquidity_buffer":
-                        float(required_buffer),
+                        float(
+                            required_buffer
+                        ),
                 },
                 explanation=(
-                    "After applying the strongest modeled operating "
-                    "response within practical limits, approximately "
-                    f"${required_buffer:,.0f} of additional liquidity "
-                    "would still be required to keep cash above the "
-                    "selected minimum."
+                    "After applying the strongest "
+                    "modeled operating response "
+                    "within practical limits, "
+                    "approximately "
+                    f"${required_buffer:,.0f} "
+                    "of additional liquidity "
+                    "would still be required to "
+                    "keep cash above the selected "
+                    "minimum."
                 ),
             )
         )
 
     return RecoveryPlan(
-        target_min_cash=target_min_cash,
-        stressed_min_cash=stressed.stressed_min_cash,
-        stressed_end_cash=stressed.stressed_end_cash,
+        target_min_cash=(
+            target_min_cash
+        ),
+        stressed_min_cash=(
+            stressed.stressed_min_cash
+        ),
+        stressed_end_cash=(
+            stressed.stressed_end_cash
+        ),
         operational_recovery_possible=(
             operational_recovery_possible
         ),
         actions=actions,
+    )
+
+
+def build_recovery_plan(
+    df: pd.DataFrame,
+    stressed_scenario: ScenarioInput,
+    target_min_cash: float = 0.0,
+) -> RecoveryPlan:
+    """
+    Backwards-compatible API.
+    """
+
+    context = (
+        prepare_scenario_context(
+            df,
+            stressed_scenario.horizon,
+        )
+    )
+
+    return (
+        build_recovery_plan_from_context(
+            context,
+            stressed_scenario,
+            target_min_cash,
+        )
     )

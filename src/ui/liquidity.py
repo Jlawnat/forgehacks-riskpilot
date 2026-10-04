@@ -4,9 +4,11 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from src.core.context import ForecastContext
+
 from src.simulation.liquidity import (
     SimulationInput,
-    simulate_liquidity,
+    simulate_liquidity_from_context,
 )
 
 
@@ -19,9 +21,8 @@ def probability(value: float) -> str:
     return f"{value * 100:.1f}%"
 
 
-@st.cache_data(show_spinner=False)
-def _cached_simulation(
-    df: pd.DataFrame,
+def _run_simulation(
+    context: ForecastContext,
     revenue_change: float,
     cost_change: float,
     receivable_delay_days: int,
@@ -29,12 +30,14 @@ def _cached_simulation(
     simulations: int = 5000,
     seed: int = 42,
 ):
-    return simulate_liquidity(
-        df,
+    return simulate_liquidity_from_context(
+        context,
         SimulationInput(
             revenue_change=revenue_change,
             cost_change=cost_change,
-            receivable_delay_days=receivable_delay_days,
+            receivable_delay_days=(
+                receivable_delay_days
+            ),
             horizon=horizon,
             simulations=simulations,
             seed=seed,
@@ -44,7 +47,7 @@ def _cached_simulation(
 
 
 def render_liquidity_risk(
-    df: pd.DataFrame,
+    context: ForecastContext,
 ) -> None:
     st.subheader("Probabilistic Liquidity Risk")
 
@@ -56,24 +59,24 @@ def render_liquidity_risk(
     )
 
     with st.spinner("Simulating liquidity distributions..."):
-        baseline = _cached_simulation(
-            df,
+        baseline = _run_simulation(
+            context,
             revenue_change=0.0,
             cost_change=0.0,
             receivable_delay_days=0,
             horizon=3,
         )
 
-        management = _cached_simulation(
-            df,
+        management = _run_simulation(
+            context,
             revenue_change=-0.05,
             cost_change=0.05,
             receivable_delay_days=15,
             horizon=3,
         )
 
-        severe = _cached_simulation(
-            df,
+        severe = _run_simulation(
+            context,
             revenue_change=-0.15,
             cost_change=0.10,
             receivable_delay_days=30,
