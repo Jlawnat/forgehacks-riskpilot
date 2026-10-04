@@ -30,6 +30,10 @@ from src.scenarios.engine import (
 from src.scenarios.recovery import (
     build_recovery_plan_from_context,
 )
+from src.scenarios.reverse_stress import (
+    ReverseStressConfig,
+    reverse_stress_from_context,
+)
 from src.ui.liquidity import render_liquidity_risk
 
 
@@ -885,6 +889,256 @@ if page == "Stress Lab":
         "receivable delays. RiskPilot recomputes cash "
         "trajectory, liquidity failure and recovery options."
     )
+
+    # ==============================================================
+    # REVERSE STRESS
+    # ==============================================================
+
+    st.markdown("### Reverse Stress Test")
+
+    st.write(
+        "Instead of choosing a shock first, reverse stress testing "
+        "finds the deterioration required to breach the selected "
+        "management liquidity reserve."
+    )
+
+    reverse_forecast_context = get_forecast_context(
+        df,
+        horizon=3,
+    )
+
+    reverse_scenario_context = (
+        scenario_context_from_forecast_context(
+            reverse_forecast_context
+        )
+    )
+
+    reverse_result = reverse_stress_from_context(
+        reverse_scenario_context,
+        ReverseStressConfig(
+            target_min_cash=(
+                risk_policy.minimum_cash_reserve
+            ),
+            horizon=3,
+            max_revenue_decline=0.30,
+            max_cost_increase=0.30,
+            max_receivable_delay_days=90,
+            grid_step=0.01,
+        ),
+    )
+
+    rr1, rr2, rr3, rr4 = st.columns(4)
+
+    rr1.metric(
+        "Reserve headroom",
+        money(
+            reverse_result.baseline_margin_to_target
+        ),
+        help=(
+            "Minimum deterministic forecast cash minus "
+            "the management liquidity reserve."
+        ),
+    )
+
+    rr2.metric(
+        "Revenue decline capacity",
+        (
+            "Already breached"
+            if reverse_result.baseline_breached
+            else (
+                "Beyond search range"
+                if (
+                    reverse_result
+                    .revenue_decline_breakpoint
+                    is None
+                )
+                else (
+                    f"{reverse_result.revenue_decline_breakpoint:.2%}"
+                )
+            )
+        ),
+        help=(
+            "Approximate revenue decline that first pushes "
+            "minimum cash below the management reserve."
+        ),
+    )
+
+    rr3.metric(
+        "Cost inflation capacity",
+        (
+            "Already breached"
+            if reverse_result.baseline_breached
+            else (
+                "Beyond search range"
+                if (
+                    reverse_result
+                    .cost_increase_breakpoint
+                    is None
+                )
+                else (
+                    f"{reverse_result.cost_increase_breakpoint:.2%}"
+                )
+            )
+        ),
+        help=(
+            "Approximate operating-cost increase that first "
+            "pushes minimum cash below the reserve."
+        ),
+    )
+
+    rr4.metric(
+        "Collection-delay capacity",
+        (
+            "Already breached"
+            if reverse_result.baseline_breached
+            else (
+                "Beyond search range"
+                if (
+                    reverse_result
+                    .receivable_delay_breakpoint_days
+                    is None
+                )
+                else (
+                    f"{reverse_result.receivable_delay_breakpoint_days} days"
+                )
+            )
+        ),
+        help=(
+            "Approximate additional receivables delay that "
+            "first pushes minimum cash below the reserve."
+        ),
+    )
+
+    if reverse_result.baseline_breached:
+        st.error(
+            "The deterministic baseline already breaches the "
+            f"${risk_policy.minimum_cash_reserve:,.0f} management "
+            "reserve. There is no remaining policy shock capacity."
+        )
+    else:
+        st.info(
+            "The deterministic baseline remains above the "
+            f"\\${risk_policy.minimum_cash_reserve:,.0f} reserve by "
+            f"\\${reverse_result.baseline_margin_to_target:,.0f}. "
+            "The breakpoints below measure how little additional "
+            "deterioration is required to exhaust that cushion."
+        )
+
+    # --------------------------------------------------------------
+    # Zoomed revenue x cost survival boundary
+    # --------------------------------------------------------------
+
+    boundary_result = reverse_stress_from_context(
+        reverse_scenario_context,
+        ReverseStressConfig(
+            target_min_cash=(
+                risk_policy.minimum_cash_reserve
+            ),
+            horizon=3,
+            max_revenue_decline=0.05,
+            max_cost_increase=0.05,
+            max_receivable_delay_days=90,
+            grid_step=0.0025,
+        ),
+    )
+
+    boundary_df = pd.DataFrame(
+        [
+            {
+                "Revenue decline (%)":
+                    point.revenue_decline * 100,
+                "Cost increase (%)":
+                    point.cost_increase * 100,
+                "Reserve margin":
+                    point.margin_to_target,
+            }
+            for point in boundary_result.grid
+        ]
+    )
+
+    boundary_matrix = boundary_df.pivot(
+        index="Revenue decline (%)",
+        columns="Cost increase (%)",
+        values="Reserve margin",
+    )
+
+    st.markdown(
+        "#### Revenue decline × cost inflation survival boundary"
+    )
+
+    st.caption(
+        "Each cell shows deterministic minimum-cash margin "
+        "relative to the management reserve. Positive values "
+        "remain inside policy; negative values breach it. "
+        "The heatmap is intentionally zoomed to small shocks "
+        "because this business currently has limited headroom."
+    )
+
+    boundary_fig = go.Figure()
+
+    boundary_fig.add_trace(
+        go.Heatmap(
+            x=boundary_matrix.columns,
+            y=boundary_matrix.index,
+            z=boundary_matrix.values,
+            colorscale="RdYlGn",
+            zmid=0,
+            colorbar=dict(
+                title="Reserve margin ($)",
+            ),
+            hovertemplate=(
+                "Revenue decline: %{y:.2f}%"
+                "<br>Cost increase: %{x:.2f}%"
+                "<br>Reserve margin: $%{z:,.0f}"
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    boundary_fig.add_trace(
+        go.Contour(
+            x=boundary_matrix.columns,
+            y=boundary_matrix.index,
+            z=boundary_matrix.values,
+            contours=dict(
+                start=0,
+                end=0,
+                size=1,
+                coloring="lines",
+                showlabels=True,
+            ),
+            showscale=False,
+            hoverinfo="skip",
+            line=dict(
+                width=4,
+                color="black",
+            ),
+            name="Reserve boundary",
+        )
+    )
+
+    boundary_fig.update_layout(
+        xaxis_title="Cost increase (%)",
+        yaxis_title="Revenue decline (%)",
+        height=500,
+        hovermode="closest",
+    )
+
+    st.plotly_chart(
+        boundary_fig,
+        use_container_width=True,
+    )
+
+    st.caption(
+        "Headline breakpoints use a finer numerical search. "
+        "The heatmap is a visual combination grid and should "
+        "not be interpreted as the source of the exact "
+        "breakpoint estimates."
+    )
+
+    st.divider()
+
+    st.markdown("### Manual Stress Scenario")
 
     with st.form("stress_form"):
         s1, s2, s3, s4 = st.columns(4)
