@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from math import ceil
 
 from pydantic import BaseModel, Field
@@ -44,11 +45,53 @@ class ScenarioResult(BaseModel):
 
     end_cash_impact: float
 
-    # Largest temporary deterioration versus baseline.
     peak_liquidity_gap: float
     peak_liquidity_gap_period: int | None
 
     trajectory: list[CashPoint]
+
+
+@dataclass(frozen=True)
+class ScenarioContext:
+    horizon: int
+    starting_cash: float
+    latest_receivables: float
+    baseline_revenue: tuple[float, ...]
+    baseline_cost: tuple[float, ...]
+
+
+def prepare_scenario_context(
+    df: pd.DataFrame,
+    horizon: int,
+) -> ScenarioContext:
+    if df.empty:
+        raise ValueError("Cannot prepare scenario context from empty data.")
+
+    revenue_forecast = forecast_metric(
+        df,
+        "revenue",
+        horizon=horizon,
+    )
+
+    cost_forecast = forecast_metric(
+        df,
+        "operating_cost",
+        horizon=horizon,
+    )
+
+    return ScenarioContext(
+        horizon=horizon,
+        starting_cash=float(df["cash_balance"].iloc[-1]),
+        latest_receivables=float(df["receivables"].iloc[-1]),
+        baseline_revenue=tuple(
+            float(point.value)
+            for point in revenue_forecast.forecasts
+        ),
+        baseline_cost=tuple(
+            float(point.value)
+            for point in cost_forecast.forecasts
+        ),
+    )
 
 
 def _estimate_runway(
@@ -99,13 +142,6 @@ def _receivable_adjustments(
     delay_days: int,
     horizon: int,
 ) -> list[float]:
-    """
-    Treat delayed receivables as a timing shock, not lost revenue.
-
-    We assume monthly forecast periods. A delay removes the current
-    receivable balance from the first projected collection period and
-    restores it once the delay has elapsed.
-    """
     adjustments = [0.0] * horizon
 
     if delay_days <= 0 or latest_receivables <= 0:
@@ -123,34 +159,17 @@ def _receivable_adjustments(
     return adjustments
 
 
-def run_scenario(
-    df: pd.DataFrame,
+def run_scenario_from_context(
+    context: ScenarioContext,
     scenario: ScenarioInput,
 ) -> ScenarioResult:
-    if df.empty:
-        raise ValueError("Cannot run a scenario on empty data.")
+    if scenario.horizon != context.horizon:
+        raise ValueError(
+            "Scenario horizon does not match prepared context."
+        )
 
-    revenue_forecast = forecast_metric(
-        df,
-        "revenue",
-        horizon=scenario.horizon,
-    )
-
-    cost_forecast = forecast_metric(
-        df,
-        "operating_cost",
-        horizon=scenario.horizon,
-    )
-
-    baseline_revenue = [
-        point.value
-        for point in revenue_forecast.forecasts
-    ]
-
-    baseline_cost = [
-        point.value
-        for point in cost_forecast.forecasts
-    ]
+    baseline_revenue = list(context.baseline_revenue)
+    baseline_cost = list(context.baseline_cost)
 
     stressed_revenue = [
         value * (1.0 + scenario.revenue_change)
@@ -162,17 +181,14 @@ def run_scenario(
         for value in baseline_cost
     ]
 
-    starting_cash = float(df["cash_balance"].iloc[-1])
-    latest_receivables = float(df["receivables"].iloc[-1])
-
     receivable_adjustments = _receivable_adjustments(
-        latest_receivables,
+        context.latest_receivables,
         scenario.receivable_delay_days,
         scenario.horizon,
     )
 
-    baseline_cash = starting_cash
-    stressed_cash = starting_cash
+    baseline_cash = context.starting_cash
+    stressed_cash = context.starting_cash
 
     baseline_flows: list[float] = []
     stressed_flows: list[float] = []
@@ -231,31 +247,32 @@ def run_scenario(
 
     peak_gap = max(liquidity_gaps, default=0.0)
 
-    if peak_gap > 0:
-        peak_period = liquidity_gaps.index(peak_gap) + 1
-    else:
-        peak_period = None
+    peak_period = (
+        liquidity_gaps.index(peak_gap) + 1
+        if peak_gap > 0
+        else None
+    )
 
     return ScenarioResult(
         inputs=scenario,
-        starting_cash=starting_cash,
+        starting_cash=context.starting_cash,
 
         baseline_end_cash=float(baseline_cash),
         stressed_end_cash=float(stressed_cash),
 
         baseline_min_cash=float(
-            min([starting_cash] + baseline_cash_values)
+            min([context.starting_cash] + baseline_cash_values)
         ),
         stressed_min_cash=float(
-            min([starting_cash] + stressed_cash_values)
+            min([context.starting_cash] + stressed_cash_values)
         ),
 
         baseline_runway_months=_estimate_runway(
-            starting_cash,
+            context.starting_cash,
             baseline_flows,
         ),
         stressed_runway_months=_estimate_runway(
-            starting_cash,
+            context.starting_cash,
             stressed_flows,
         ),
 
@@ -274,4 +291,19 @@ def run_scenario(
         peak_liquidity_gap_period=peak_period,
 
         trajectory=trajectory,
+    )
+
+
+def run_scenario(
+    df: pd.DataFrame,
+    scenario: ScenarioInput,
+) -> ScenarioResult:
+    context = prepare_scenario_context(
+        df,
+        scenario.horizon,
+    )
+
+    return run_scenario_from_context(
+        context,
+        scenario,
     )
