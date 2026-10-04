@@ -631,3 +631,44 @@ def test_brief_round_trips_deterministically():
         restored.model_dump(mode="json")
         == payload
     )
+
+
+def test_cash_driver_summary_keeps_inflows_and_outflows_visible():
+    events = []
+
+    for index in range(6):
+        events.append(
+            _event(
+                f"inflow-{index}",
+                amount=25000.0,
+                direction="INFLOW",
+                category="customer receipts",
+            )
+        )
+
+        events.append(
+            _event(
+                f"outflow-{index}",
+                amount=15000.0,
+                direction="OUTFLOW",
+                category="supplier payments",
+            )
+        )
+
+    brief = build_liquidity_decision_brief(
+        _snapshot(
+            events=tuple(events),
+        ),
+        create_cash_action_register(()),
+        brief_id="brief-001",
+        created_at=_created_at(),
+        max_cash_drivers=4,
+    )
+
+    directions = [
+        item.direction
+        for item in brief.cash_drivers
+    ]
+
+    assert directions.count("INFLOW") == 2
+    assert directions.count("OUTFLOW") == 2

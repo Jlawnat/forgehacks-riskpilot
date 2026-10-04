@@ -442,14 +442,80 @@ def _build_cash_drivers(
                 )
             )
 
+    ranking_key = lambda item: (
+        -item.included_amount,
+        item.week_number,
+        item.event_id,
+    )
+
     ranked = sorted(
         drivers,
-        key=lambda item: (
-            -item.included_amount,
-            item.week_number,
-            item.event_id,
-        ),
+        key=ranking_key,
     )
+
+    inflows = sorted(
+        (
+            item
+            for item in drivers
+            if item.direction == "INFLOW"
+        ),
+        key=ranking_key,
+    )
+
+    outflows = sorted(
+        (
+            item
+            for item in drivers
+            if item.direction == "OUTFLOW"
+        ),
+        key=ranking_key,
+    )
+
+    if (
+        max_cash_drivers >= 2
+        and inflows
+        and outflows
+    ):
+        per_side = max_cash_drivers // 2
+
+        selected = (
+            inflows[:per_side]
+            + outflows[:per_side]
+        )
+
+        selected_keys = {
+            (
+                item.event_id,
+                item.week_number,
+                item.direction,
+            )
+            for item in selected
+        }
+
+        remaining = [
+            item
+            for item in ranked
+            if (
+                item.event_id,
+                item.week_number,
+                item.direction,
+            )
+            not in selected_keys
+        ]
+
+        selected.extend(
+            remaining[
+                : max_cash_drivers
+                - len(selected)
+            ]
+        )
+
+        return tuple(
+            sorted(
+                selected,
+                key=ranking_key,
+            )
+        )
 
     return tuple(
         ranked[:max_cash_drivers]

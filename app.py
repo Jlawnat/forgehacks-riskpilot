@@ -42,6 +42,9 @@ from src.simulation.recovery_validation import (
     validate_recovery_option_from_context,
 )
 from src.ui.liquidity import render_liquidity_risk
+from src.ui.v2_command_center import (
+    render_v2_command_center,
+)
 from src.ui.ai_analyst import render_ai_risk_analyst
 
 
@@ -195,7 +198,14 @@ def get_forecast_context(
 # DATA INPUT
 # ---------------------------------------------------------------------
 
-st.sidebar.header("Business data")
+st.sidebar.header("Legacy analysis inputs")
+
+st.sidebar.caption(
+    "These inputs power the legacy monthly Forecast, "
+    "Liquidity Risk, Stress Lab and Legacy Overview. "
+    "The V2 13-week Command Center uses its own "
+    "scenario evidence and policy settings."
+)
 
 source = st.sidebar.radio(
     "Data source",
@@ -261,7 +271,7 @@ risks = assess_business_risk(metrics)
 # ---------------------------------------------------------------------
 
 st.sidebar.divider()
-st.sidebar.subheader("Risk appetite")
+st.sidebar.subheader("Legacy risk appetite")
 
 default_reserve = min(
     20000.0,
@@ -342,9 +352,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.caption(
-    "Decision-support prototype only. "
-    "Not accounting, tax, legal or investment advice."
+st.markdown(
+    """
+    <div class="riskpilot-disclaimer">
+        Decision-support prototype only.
+        Not accounting, tax, legal or investment advice.
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 
@@ -368,6 +383,22 @@ page = st.radio(
 # =====================================================================
 
 if page == "Command Center":
+    command_center_mode = st.radio(
+        "Command Center mode",
+        [
+            "V2 13-Week Liquidity",
+            "Legacy Overview",
+        ],
+        horizontal=True,
+    )
+
+    if (
+        command_center_mode
+        == "V2 13-Week Liquidity"
+    ):
+        render_v2_command_center()
+        st.stop()
+
     command_context = get_forecast_context(
         df,
         horizon=6,
