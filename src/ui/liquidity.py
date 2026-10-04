@@ -72,11 +72,11 @@ def render_liquidity_risk(
             cash_floor=cash_floor,
         )
 
-        management = _run_simulation(
+        moderate = _run_simulation(
             context,
-            revenue_change=-0.05,
-            cost_change=0.05,
-            receivable_delay_days=15,
+            revenue_change=-0.002,
+            cost_change=0.004,
+            receivable_delay_days=0,
             horizon=3,
             cash_floor=cash_floor,
         )
@@ -234,10 +234,19 @@ def render_liquidity_risk(
         )
     )
 
+    if cash_floor > 0:
+        fig.add_hline(
+            y=cash_floor,
+            line_dash="dash",
+            annotation_text=(
+                f"Management reserve ${cash_floor:,.0f}"
+            ),
+        )
+
     fig.add_hline(
         y=0,
         line_dash="dot",
-        annotation_text="Cash floor",
+        annotation_text="Cash exhaustion $0",
     )
 
     fig.update_layout(
@@ -259,7 +268,7 @@ def render_liquidity_risk(
     left, right = st.columns(2)
 
     with left:
-        st.markdown("### Shortfall probability by period")
+        st.markdown("### Reserve-breach probability by period")
 
         failure_df = pd.DataFrame(
             {
@@ -307,7 +316,7 @@ def render_liquidity_risk(
 
         scenarios = {
             "Baseline": baseline,
-            "Management": management,
+            "Moderate Downside": moderate,
             "Severe": severe,
         }
 
@@ -315,7 +324,7 @@ def render_liquidity_risk(
             [
                 {
                     "Scenario": name,
-                    "Shortfall probability":
+                    "Reserve-breach probability":
                         result.shortfall_probability * 100,
                     "Median end cash":
                         result.median_end_cash,
@@ -333,13 +342,13 @@ def render_liquidity_risk(
             go.Bar(
                 x=comparison_df["Scenario"],
                 y=comparison_df[
-                    "Shortfall probability"
+                    "Reserve-breach probability"
                 ],
                 text=[
                     f"{value:.1f}%"
                     for value
                     in comparison_df[
-                        "Shortfall probability"
+                        "Reserve-breach probability"
                     ]
                 ],
                 textposition="auto",
@@ -348,7 +357,7 @@ def render_liquidity_risk(
 
         comparison_fig.update_layout(
             yaxis=dict(
-                title="Shortfall probability",
+                title="Reserve-breach probability",
                 range=[0, 100],
             ),
             height=360,
@@ -366,7 +375,7 @@ def render_liquidity_risk(
         hide_index=True,
         use_container_width=True,
         column_config={
-            "Shortfall probability":
+            "Reserve-breach probability":
                 st.column_config.NumberColumn(
                     format="%.1f%%"
                 ),
