@@ -12,6 +12,7 @@ from src.ai.context import (
 )
 from src.ai.tools import (
     get_business_health,
+    get_liquidity_decision_brief,
     get_forecast_outlook,
     get_liquidity_risk,
     get_recovery_options,
@@ -119,6 +120,25 @@ STRICT GROUNDING RULES
 18. End supported business-specific answers with a short line:
     "Evidence used: ..."
     naming the RiskPilot tools you used.
+
+19. When a V2 Liquidity Decision Brief is available, use
+    get_liquidity_decision_brief for questions about the 13-week
+    direct-cash forecast, reserve/headroom, evidence coverage,
+    key cash drivers, V2 recovery, cash actions, monitoring
+    triggers or V2 limitations.
+
+20. Do not silently combine legacy monthly forecast or recovery
+    outputs with V2 13-week brief values. If the user explicitly
+    asks for a comparison, label the different horizons and
+    methodologies clearly.
+
+21. Treat the V2 Liquidity Decision Brief as precomputed evidence.
+    Do not recalculate its cash values, probabilities, buffers,
+    action impacts or thresholds.
+
+22. Evidence coverage is not a probability. Expected cash impact
+    from an action is not realised benefit unless the brief
+    reports evidence-backed realised benefit.
 """.strip()
 
 
@@ -139,6 +159,7 @@ def build_risk_analyst() -> Agent[
         model=model,
         instructions=INSTRUCTIONS,
         tools=[
+            get_liquidity_decision_brief,
             get_business_health,
             get_forecast_outlook,
             get_liquidity_risk,

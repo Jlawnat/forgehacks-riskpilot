@@ -55,6 +55,52 @@ def _json(
 # ============================================================
 
 
+def liquidity_decision_brief_snapshot(
+    context: RiskAnalystContext,
+) -> dict[str, Any]:
+    """
+    Return the already-calculated V2 Liquidity Decision Brief.
+
+    No forecasting, simulation, recovery optimisation or financial
+    calculation occurs here.
+    """
+    brief = context.liquidity_brief
+
+    if brief is None:
+        return {
+            "available": False,
+            "reason": (
+                "No V2 Liquidity Decision Brief has been "
+                "attached to the current analyst context."
+            ),
+        }
+
+    return {
+        "available": True,
+        "brief": brief.model_dump(
+            mode="json"
+        ),
+        "grounding_notes": {
+            "financial_values": (
+                "Use the supplied brief values as authoritative. "
+                "Do not recalculate them."
+            ),
+            "evidence_coverage": (
+                "Evidence coverage is an evidence-quality metric, "
+                "not a probability or confidence score."
+            ),
+            "cash_actions": (
+                "Expected cash impact is not realised cash benefit. "
+                "Realised benefit is evidence-backed separately."
+            ),
+            "recovery": (
+                "Deterministic feasibility and probabilistic "
+                "adequacy are separate conclusions."
+            ),
+        },
+    }
+
+
 def business_health_snapshot(
     context: RiskAnalystContext,
 ) -> dict[str, Any]:
@@ -1008,5 +1054,35 @@ def validate_recovery_options(
             revenue_change_pct,
             cost_change_pct,
             receivable_delay_days,
+        )
+    )
+
+
+
+@tool
+def get_liquidity_decision_brief(
+    ctx: RunContextWrapper[
+        RiskAnalystContext
+    ],
+) -> str:
+    """
+    Return RiskPilot's precomputed V2 13-week Liquidity Decision
+    Brief.
+
+    Use this for questions about the current direct-cash position,
+    management reserve/headroom, evidence coverage, key cash
+    drivers, V2 recovery validation, cash actions, monitoring
+    triggers and limitations.
+
+    The tool does not calculate new financial values.
+    """
+
+    ctx.context.record_tool(
+        "get_liquidity_decision_brief"
+    )
+
+    return _json(
+        liquidity_decision_brief_snapshot(
+            ctx.context
         )
     )

@@ -14,6 +14,9 @@ from src.core.context import (
     ForecastContext,
     build_forecast_context,
 )
+from src.core.liquidity_brief import (
+    LiquidityDecisionBrief,
+)
 from src.core.risk_policy import RiskPolicy
 
 
@@ -24,6 +27,8 @@ class RiskAnalystContext:
     forecast: ForecastContext
     metrics: object
     risks: object
+
+    liquidity_brief: LiquidityDecisionBrief | None = None
 
     tool_calls: list[str] = field(
         default_factory=list
@@ -40,6 +45,7 @@ def build_risk_analyst_context(
     df: pd.DataFrame,
     policy: RiskPolicy,
     horizon: int = 3,
+    liquidity_brief: LiquidityDecisionBrief | None = None,
 ) -> RiskAnalystContext:
     """
     Prepare all deterministic dependencies needed
@@ -68,4 +74,5 @@ def build_risk_analyst_context(
         forecast=forecast,
         metrics=metrics,
         risks=risks,
+        liquidity_brief=liquidity_brief,
     )
