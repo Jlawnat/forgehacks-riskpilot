@@ -29,6 +29,7 @@ def _run_simulation(
     horizon: int,
     simulations: int = 5000,
     seed: int = 42,
+    cash_floor: float = 0.0,
 ):
     return simulate_liquidity_from_context(
         context,
@@ -42,12 +43,15 @@ def _run_simulation(
             simulations=simulations,
             seed=seed,
             confidence_level=0.95,
+            cash_floor=cash_floor,
         ),
     )
 
 
 def render_liquidity_risk(
     context: ForecastContext,
+    cash_floor: float = 0.0,
+    max_shortfall_probability: float = 0.05,
 ) -> None:
     st.subheader("Probabilistic Liquidity Risk")
 
@@ -65,6 +69,7 @@ def render_liquidity_risk(
             cost_change=0.0,
             receivable_delay_days=0,
             horizon=3,
+            cash_floor=cash_floor,
         )
 
         management = _run_simulation(
@@ -73,6 +78,7 @@ def render_liquidity_risk(
             cost_change=0.05,
             receivable_delay_days=15,
             horizon=3,
+            cash_floor=cash_floor,
         )
 
         severe = _run_simulation(
@@ -81,7 +87,17 @@ def render_liquidity_risk(
             cost_change=0.10,
             receivable_delay_days=30,
             horizon=3,
+            cash_floor=cash_floor,
         )
+
+    insolvency_baseline = _run_simulation(
+        context,
+        revenue_change=0.0,
+        cost_change=0.0,
+        receivable_delay_days=0,
+        horizon=3,
+        cash_floor=0.0,
+    )
 
     # --------------------------------------------------------------
     # HEADLINE RISK
@@ -92,16 +108,17 @@ def render_liquidity_risk(
     c1, c2, c3, c4 = st.columns(4)
 
     c1.metric(
-        "3-period shortfall probability",
+        "Reserve-breach probability",
         probability(
             baseline.shortfall_probability
         ),
     )
 
     c2.metric(
-        "Median ending cash",
-        money(
-            baseline.median_end_cash
+        "Cash-negative probability",
+        probability(
+            insolvency_baseline
+            .shortfall_probability
         ),
     )
 
@@ -118,6 +135,22 @@ def render_liquidity_risk(
             baseline.liquidity_buffer_at_confidence
         ),
     )
+
+    if (
+        baseline.shortfall_probability
+        <= max_shortfall_probability
+    ):
+        st.success(
+            "Liquidity risk is within the selected "
+            "management appetite."
+        )
+    else:
+        st.error(
+            "Liquidity risk exceeds management appetite: "
+            f"{probability(baseline.shortfall_probability)} "
+            "reserve-breach probability versus "
+            f"{probability(max_shortfall_probability)} allowed."
+        )
 
     if baseline.residual_pairs_available < 20:
         st.warning(

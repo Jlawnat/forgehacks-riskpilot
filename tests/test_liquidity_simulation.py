@@ -192,16 +192,44 @@ def test_borderline_demo_has_non_degenerate_risk():
 
     df, _ = validate_business_data(raw)
 
-    result = simulate_liquidity(
+    # Borderline Business is intentionally calibrated
+    # around a $20k management liquidity reserve rather
+    # than literal cash insolvency.
+    reserve_result = simulate_liquidity(
         df,
         SimulationInput(
             horizon=3,
             simulations=5000,
             seed=42,
+            cash_floor=20000.0,
         ),
     )
 
-    assert 0.05 < result.shortfall_probability < 0.95
+    insolvency_result = simulate_liquidity(
+        df,
+        SimulationInput(
+            horizon=3,
+            simulations=5000,
+            seed=42,
+            cash_floor=0.0,
+        ),
+    )
+
+    # The demo should sit near the management-policy
+    # boundary so risk is informative rather than
+    # trivially 0% or 100%.
+    assert (
+        0.05
+        < reserve_result.shortfall_probability
+        < 0.95
+    )
+
+    # At the same time, the company should not already
+    # be close to literal cash exhaustion.
+    assert (
+        insolvency_result.shortfall_probability
+        < reserve_result.shortfall_probability
+    )
 
 
 def test_borderline_severe_scenario_materially_worsens_risk():

@@ -7,6 +7,11 @@ import streamlit as st
 from src.analytics.metrics import calculate_business_metrics
 from src.analytics.risk import assess_business_risk
 from src.core.context import build_forecast_context
+from src.core.risk_policy import (
+    RiskPolicy,
+    first_cash_breach,
+    reserve_headroom,
+)
 from src.forecasting.forecast import forecast_metric
 from src.forecasting.validation import evaluate_models
 from src.ingestion.loader import (
@@ -246,6 +251,74 @@ risks = assess_business_risk(metrics)
 
 
 # ---------------------------------------------------------------------
+# MANAGEMENT RISK APPETITE
+# ---------------------------------------------------------------------
+
+st.sidebar.divider()
+st.sidebar.subheader("Risk appetite")
+
+default_reserve = min(
+    20000.0,
+    max(
+        0.0,
+        float(metrics.latest_cash_balance) * 0.40,
+    ),
+)
+
+minimum_cash_reserve = st.sidebar.number_input(
+    "Minimum liquidity reserve",
+    min_value=0.0,
+    value=float(
+        round(
+            default_reserve / 1000
+        ) * 1000
+    ),
+    step=1000.0,
+    help=(
+        "Cash level management wants to preserve. "
+        "RiskPilot treats falling below this level "
+        "as a liquidity-policy breach."
+    ),
+)
+
+max_shortfall_probability_pct = (
+    st.sidebar.slider(
+        "Maximum acceptable breach probability",
+        min_value=1,
+        max_value=50,
+        value=5,
+        step=1,
+        format="%d%%",
+        help=(
+            "Maximum probability management is willing "
+            "to accept that future cash falls below "
+            "the selected reserve."
+        ),
+    )
+)
+
+risk_policy = RiskPolicy(
+    minimum_cash_reserve=(
+        minimum_cash_reserve
+    ),
+    max_shortfall_probability=(
+        max_shortfall_probability_pct
+        / 100
+    ),
+)
+
+headroom = reserve_headroom(
+    metrics.latest_cash_balance,
+    risk_policy.minimum_cash_reserve,
+)
+
+st.sidebar.caption(
+    "Current reserve headroom: "
+    f"${headroom:,.0f}"
+)
+
+
+# ---------------------------------------------------------------------
 # HERO
 # ---------------------------------------------------------------------
 
@@ -319,7 +392,14 @@ if page == "Command Center":
     st.subheader("Executive Risk Command Center")
 
     failure_period = (
-        baseline_outlook.baseline_first_negative_period
+        first_cash_breach(
+            [
+                point.baseline_cash
+                for point
+                in baseline_outlook.trajectory
+            ],
+            risk_policy.minimum_cash_reserve,
+        )
         if baseline_outlook is not None
         else None
     )
@@ -382,9 +462,9 @@ if page == "Command Center":
 
     with c4:
         card(
-            "Forecast cash failure",
+            "Forecast reserve breach",
             forecast_failure,
-            "Forward baseline scenario",
+            f"Below ${risk_policy.minimum_cash_reserve:,.0f} reserve",
         )
 
     with c5:
@@ -492,8 +572,9 @@ if page == "Command Center":
 
         if failure_period is not None:
             observations.append(
-                "Baseline forecast indicates cash may turn "
-                f"negative in period {failure_period}."
+                "Baseline forecast indicates cash may breach "
+                f"the ${risk_policy.minimum_cash_reserve:,.0f} "
+                f"management reserve in period {failure_period}."
             )
 
         for obs in observations:
@@ -781,7 +862,14 @@ if page == "Liquidity Risk":
     )
 
     render_liquidity_risk(
-        liquidity_context
+        liquidity_context,
+        cash_floor=(
+            risk_policy.minimum_cash_reserve
+        ),
+        max_shortfall_probability=(
+            risk_policy
+            .max_shortfall_probability
+        ),
     )
 
 
@@ -894,7 +982,9 @@ if page == "Stress Lab":
                 build_recovery_plan_from_context(
                     stress_scenario_context,
                     scenario,
-                    target_min_cash=0,
+                    target_min_cash=(
+                        risk_policy.minimum_cash_reserve
+                    ),
                 )
             )
 
