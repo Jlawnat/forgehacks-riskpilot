@@ -106,7 +106,17 @@ STRICT GROUNDING RULES
     - revenue_risk is the categorical revenue risk assessment.
     Do not substitute one concept for another.
 
-16. End business-specific answers with a short line:
+16. If no available RiskPilot tool calculates a requested
+    business-specific number or probability, do not infer it from
+    related outputs. State explicitly:
+    "RiskPilot has not calculated that value."
+    Do not imply that the language model could calculate it itself.
+
+17. If a business-specific question is unsupported and no tool was
+    used, end with:
+    "Evidence used: none."
+
+18. End supported business-specific answers with a short line:
     "Evidence used: ..."
     naming the RiskPilot tools you used.
 """.strip()
