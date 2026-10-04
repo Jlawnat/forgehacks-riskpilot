@@ -438,6 +438,36 @@ def _apply_operating_recovery(
     )
 
 
+
+def apply_recovery_operating_actions(
+    forecast_input: DirectCashForecastInput,
+    constraints: RecoveryConstraintSet,
+    plan: RecoveryPlan,
+) -> tuple[
+    DirectCashForecastInput,
+    tuple[str, ...],
+]:
+    """
+    Public V2 recovery transformation used by downstream
+    uncertainty validation.
+
+    External liquidity is deliberately not inserted into the
+    returned base cash-event set. It remains a separate recovery
+    overlay with its own availability timing.
+    """
+    validate_recovery_plan(
+        forecast_input,
+        constraints,
+        plan,
+    )
+
+    return _apply_operating_recovery(
+        forecast_input,
+        constraints,
+        plan,
+    )
+
+
 def evaluate_recovery_plan(
     forecast_input: DirectCashForecastInput,
     constraints: RecoveryConstraintSet,
