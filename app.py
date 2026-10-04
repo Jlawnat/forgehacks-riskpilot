@@ -52,6 +52,7 @@ st.set_page_config(
     page_title="RiskPilot",
     page_icon="◈",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
 
@@ -63,7 +64,7 @@ st.markdown(
     """
     <style>
     .block-container {
-        padding-top: 2rem;
+        padding-top: 4rem;
         padding-bottom: 3rem;
         max-width: 1500px;
     }
@@ -128,6 +129,152 @@ st.markdown(
     .small-note {
         color: #777;
         font-size: 0.82rem;
+    }
+
+
+    /* ---------------------------------------------------------
+       RiskPilot commercial product shell
+       --------------------------------------------------------- */
+
+    .riskpilot-product-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+        margin: 0 0 1rem 0;
+        padding: 1rem 1.15rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background:
+            linear-gradient(
+                135deg,
+                #ffffff 0%,
+                #f8fbff 58%,
+                #f5f7ff 100%
+            );
+        box-shadow:
+            0 1px 2px rgba(15, 23, 42, 0.025),
+            0 8px 24px rgba(15, 23, 42, 0.025);
+    }
+
+    .riskpilot-brand-lockup {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        min-width: 0;
+    }
+
+    .riskpilot-brand-mark {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.65rem;
+        height: 2.65rem;
+        flex: 0 0 2.65rem;
+        border-radius: 11px;
+        background: #1d4ed8;
+        color: #ffffff;
+        font-size: 1.25rem;
+        font-weight: 800;
+        box-shadow:
+            0 5px 14px rgba(29, 78, 216, 0.16);
+    }
+
+    .riskpilot-brand-text {
+        min-width: 0;
+    }
+
+    .riskpilot-product-brand {
+        color: #0f172a;
+        font-size: 1.55rem;
+        line-height: 1.05;
+        font-weight: 800;
+        letter-spacing: -0.035em;
+        margin-bottom: 0.22rem;
+    }
+
+    .riskpilot-product-tagline {
+        color: #475569;
+        font-size: 0.86rem;
+        line-height: 1.35;
+        font-weight: 500;
+    }
+
+    .riskpilot-product-capabilities {
+        color: #94a3b8;
+        font-size: 0.74rem;
+        line-height: 1.35;
+        margin-top: 0.18rem;
+    }
+
+    .riskpilot-product-badge {
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+        padding: 0.42rem 0.7rem;
+        border-radius: 999px;
+        border: 1px solid #dbeafe;
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.055em;
+        text-transform: uppercase;
+    }
+
+    @media (max-width: 800px) {
+        .riskpilot-product-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .riskpilot-product-badge {
+            display: none;
+        }
+    }
+
+    .riskpilot-legacy-context {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.42rem;
+        margin: 0.8rem 0 1.15rem 0;
+        padding: 0.68rem 0.85rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        color: #475569;
+        font-size: 0.82rem;
+        line-height: 1.35;
+    }
+
+    .riskpilot-legacy-context strong {
+        color: #0f172a;
+        font-weight: 700;
+    }
+
+    .riskpilot-context-dot {
+        color: #cbd5e1;
+    }
+
+    /* Primary actions */
+    [data-testid="stBaseButton-primary"] {
+        background: #1d4ed8 !important;
+        border-color: #1d4ed8 !important;
+        color: #ffffff !important;
+    }
+
+    [data-testid="stBaseButton-primary"]:hover {
+        background: #1e40af !important;
+        border-color: #1e40af !important;
+    }
+
+    /* Text inputs / text areas */
+    textarea:focus,
+    input:focus {
+        border-color: #93c5fd !important;
+        box-shadow: 0 0 0 1px #93c5fd !important;
+        outline: none !important;
     }
     </style>
     """,
@@ -335,47 +482,125 @@ st.sidebar.caption(
 
 
 # ---------------------------------------------------------------------
-# HERO
+# PRODUCT SHELL
 # ---------------------------------------------------------------------
 
 st.markdown(
-    """
-    <div class="riskpilot-hero">
-        <div class="riskpilot-title">RiskPilot</div>
-        <div class="riskpilot-subtitle">
-            Explainable business risk intelligence combining
-            forecasting, stress testing, liquidity analysis,
-            recovery optimisation and AI-assisted decision support.
-        </div>
-    </div>
-    """,
+    (
+        '<div class="riskpilot-product-header">'
+        '<div class="riskpilot-brand-lockup">'
+        '<div class="riskpilot-brand-mark">◈</div>'
+        '<div class="riskpilot-brand-text">'
+        '<div class="riskpilot-product-brand">RiskPilot</div>'
+        '<div class="riskpilot-product-tagline">'
+        'AI-powered liquidity decision intelligence'
+        '</div>'
+        '<div class="riskpilot-product-capabilities">'
+        'Forecast · uncertainty · recovery · grounded AI'
+        '</div>'
+        '</div>'
+        '</div>'
+        '<div class="riskpilot-product-badge">'
+        'Decision Intelligence'
+        '</div>'
+        '</div>'
+    ),
     unsafe_allow_html=True,
 )
 
-st.markdown(
-    """
-    <div class="riskpilot-disclaimer">
-        Decision-support prototype only.
-        Not accounting, tax, legal or investment advice.
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
 
-
-page = st.radio(
-    "Navigation",
+product_area = st.segmented_control(
+    "RiskPilot workspace",
     [
         "Command Center",
-        "Forecast Intelligence",
-        "Liquidity Risk",
-        "Stress Lab",
-        "AI Risk Analyst",
-        "Model & Data",
+        "Advanced Analytics",
+        "Methodology & Evidence",
     ],
-    horizontal=True,
+    default="Command Center",
     label_visibility="collapsed",
+    key="riskpilot_product_area",
 )
+
+advanced_area = None
+
+if product_area == "Advanced Analytics":
+    advanced_area = st.segmented_control(
+        "Advanced analytics",
+        [
+            "Forecast Intelligence",
+            "Liquidity Risk",
+            "Stress Lab",
+            "Legacy Monthly Overview",
+            "Legacy AI Analyst",
+        ],
+        default="Forecast Intelligence",
+        label_visibility="collapsed",
+        key="riskpilot_advanced_area",
+    )
+
+if product_area == "Command Center":
+    page = "Command Center"
+
+elif product_area == "Methodology & Evidence":
+    page = "Model & Data"
+
+elif advanced_area == "Legacy Monthly Overview":
+    page = "Command Center"
+
+elif advanced_area == "Legacy AI Analyst":
+    page = "AI Risk Analyst"
+
+else:
+    page = (
+        advanced_area
+        or "Forecast Intelligence"
+    )
+
+
+# ---------------------------------------------------------------------
+# LEGACY MONTHLY CONTEXT
+# ---------------------------------------------------------------------
+
+if product_area in {
+    "Advanced Analytics",
+    "Methodology & Evidence",
+}:
+    legacy_business_name = (
+        demo_name
+        if source == "Demo business"
+        else "Uploaded business data"
+    )
+
+    legacy_context_label = (
+        "Legacy monthly analytics"
+        if product_area == "Advanced Analytics"
+        else "Legacy monthly methodology & evidence"
+    )
+
+    st.markdown(
+        f"""
+        <div class="riskpilot-legacy-context">
+            <strong>{legacy_context_label}</strong>
+            <span class="riskpilot-context-dot">·</span>
+            <span>{legacy_business_name}</span>
+            <span class="riskpilot-context-dot">·</span>
+            <span>
+                Reserve
+                {money(risk_policy.minimum_cash_reserve)}
+            </span>
+            <span class="riskpilot-context-dot">·</span>
+            <span>
+                Risk appetite
+                {percent(risk_policy.max_shortfall_probability)}
+            </span>
+            <span class="riskpilot-context-dot">·</span>
+            <span>
+                Inputs available from the sidebar
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # =====================================================================
@@ -383,13 +608,15 @@ page = st.radio(
 # =====================================================================
 
 if page == "Command Center":
-    command_center_mode = st.radio(
-        "Command Center mode",
-        [
-            "V2 13-Week Liquidity",
-            "Legacy Overview",
-        ],
-        horizontal=True,
+    command_center_mode = (
+        "Legacy Overview"
+        if (
+            product_area
+            == "Advanced Analytics"
+            and advanced_area
+            == "Legacy Monthly Overview"
+        )
+        else "V2 13-Week Liquidity"
     )
 
     if (

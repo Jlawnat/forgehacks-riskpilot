@@ -14,6 +14,9 @@ from src.demo.v2_scenarios import (
     get_v2_demo_scenario,
     get_v2_demo_scenarios,
 )
+from src.ui.v2_copilot import (
+    render_v2_copilot,
+)
 
 
 def _money(value: float) -> str:
@@ -63,6 +66,37 @@ def _inject_v2_styles() -> None:
         .rp-shell {
             margin-top: 0.25rem;
             margin-bottom: 1.25rem;
+        }
+
+        .rp-context-bar {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.42rem;
+            min-height: 2.75rem;
+            margin-top: 1.45rem;
+            padding: 0.68rem 0.9rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 11px;
+            background: #f8fafc;
+            color: #475569;
+            font-size: 0.84rem;
+            line-height: 1.35;
+        }
+
+        .rp-context-primary {
+            color: #0f172a;
+            font-weight: 700;
+        }
+
+        .rp-context-dot {
+            color: #cbd5e1;
+            padding: 0 0.08rem;
+        }
+
+        .rp-context-value {
+            color: #475569;
+            font-weight: 500;
         }
 
         .rp-eyebrow {
@@ -1294,11 +1328,25 @@ def render_v2_command_center() -> None:
         for scenario in scenarios
     }
 
-    selected_name = st.selectbox(
-        "V2 demo business",
-        list(name_to_id),
-        index=0,
+    scenario_names = list(
+        name_to_id
     )
+
+    (
+        context_col,
+        selector_col,
+    ) = st.columns(
+        [4.8, 1.6],
+        vertical_alignment="center",
+    )
+
+    with selector_col:
+        selected_name = st.selectbox(
+            "Change scenario",
+            scenario_names,
+            index=0,
+            key="riskpilot_v2_scenario",
+        )
 
     scenario_id = name_to_id[
         selected_name
@@ -1314,6 +1362,35 @@ def render_v2_command_center() -> None:
 
     brief = result.brief
     position = brief.position
+
+    forecast_weeks = len(
+        result.snapshot.forecast.weeks
+    )
+
+    with context_col:
+        st.markdown(
+            f"""
+            <div class="rp-context-bar">
+                <span class="rp-context-primary">
+                    {scenario.name}
+                </span>
+                <span class="rp-context-dot">·</span>
+                <span class="rp-context-value">
+                    {forecast_weeks}-week forecast
+                </span>
+                <span class="rp-context-dot">·</span>
+                <span class="rp-context-value">
+                    Reserve {_money(position.management_reserve)}
+                </span>
+                <span class="rp-context-dot">·</span>
+                <span class="rp-context-value">
+                    Risk appetite
+                    {_pct(scenario.max_reserve_breach_probability)}
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     status_label, status_tone = (
         _status_for_result(
@@ -1556,6 +1633,10 @@ def render_v2_command_center() -> None:
     _render_riskpilot_insight(
         result,
         scenario,
+    )
+
+    render_v2_copilot(
+        result.brief
     )
 
     st.markdown(

@@ -239,6 +239,11 @@ def build_command_center(
             recovery_validation
         ),
         monitoring_evaluation=monitoring,
+        baseline_simulation=simulation,
+        maximum_acceptable_breach_probability=(
+            scenario
+            .max_reserve_breach_probability
+        ),
     )
 
     return CommandCenterResult(

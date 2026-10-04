@@ -27,6 +27,9 @@ from src.core.recovery_engine import (
 from src.core.weekly_recovery_validation import (
     WeeklyRecoveryValidationResult,
 )
+from src.core.weekly_simulation import (
+    WeeklyLiquiditySimulationResult,
+)
 
 
 class LiquidityPositionBrief(BaseModel):
@@ -122,6 +125,70 @@ class CashDriverBrief(BaseModel):
     )
 
     signed_cash_effect: float
+
+
+class BaselineUncertaintyBrief(BaseModel):
+    """
+    Baseline probabilistic liquidity evidence.
+
+    These values are copied from the already-computed weekly
+    liquidity simulation. No simulation or financial calculation
+    occurs in the brief layer.
+    """
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    simulations: int = Field(ge=100)
+
+    confidence_level: float = Field(
+        ge=0.0,
+        le=1.0,
+    )
+
+    modelled_error_samples_available: int = Field(
+        ge=0,
+    )
+
+    committed_timing_events_modelled: int = Field(
+        ge=0,
+    )
+
+    reserve_breach_probability: float = Field(
+        ge=0.0,
+        le=1.0,
+    )
+
+    first_week_reserve_breach_probability: float = Field(
+        ge=0.0,
+        le=1.0,
+    )
+
+    maximum_acceptable_breach_probability: float = Field(
+        ge=0.0,
+        le=1.0,
+    )
+
+    within_risk_appetite: bool
+
+    median_end_cash: float
+    p10_end_cash: float
+    p90_end_cash: float
+
+    median_min_cash: float
+    p10_min_cash: float
+
+    liquidity_buffer_at_confidence: float = Field(
+        ge=0.0,
+    )
+
+    expected_tail_buffer: float = Field(
+        ge=0.0,
+    )
+
+    limitations: tuple[str, ...] = ()
 
 
 class RecoveryBrief(BaseModel):
@@ -301,6 +368,8 @@ class LiquidityDecisionBrief(BaseModel):
     forecast_start_date: date
 
     position: LiquidityPositionBrief
+
+    uncertainty: BaselineUncertaintyBrief | None = None
 
     cash_drivers: tuple[
         CashDriverBrief,
@@ -715,6 +784,12 @@ def build_liquidity_decision_brief(
     monitoring_evaluation: (
         MonitoringTriggerEvaluation | None
     ) = None,
+    baseline_simulation: (
+        WeeklyLiquiditySimulationResult | None
+    ) = None,
+    maximum_acceptable_breach_probability: (
+        float | None
+    ) = None,
     max_cash_drivers: int = 8,
 ) -> LiquidityDecisionBrief:
     """
@@ -725,6 +800,43 @@ def build_liquidity_decision_brief(
     here.
     """
     metrics = snapshot.decision_metrics
+
+    if (
+        (baseline_simulation is None)
+        != (
+            maximum_acceptable_breach_probability
+            is None
+        )
+    ):
+        raise ValueError(
+            "baseline_simulation and "
+            "maximum_acceptable_breach_probability "
+            "must be supplied together."
+        )
+
+    if baseline_simulation is not None:
+        if (
+            baseline_simulation.inputs.cash_floor
+            != metrics.management_reserve
+        ):
+            raise ValueError(
+                "Baseline simulation cash floor does not "
+                "match the forecast snapshot management reserve."
+            )
+
+    if (
+        maximum_acceptable_breach_probability
+        is not None
+        and not (
+            0.0
+            <= maximum_acceptable_breach_probability
+            <= 1.0
+        )
+    ):
+        raise ValueError(
+            "maximum_acceptable_breach_probability "
+            "must be between 0 and 1."
+        )
 
     if (
         recovery_validation is not None
@@ -843,6 +955,71 @@ def build_liquidity_decision_brief(
         ),
     )
 
+    uncertainty_brief = (
+        None
+        if baseline_simulation is None
+        else BaselineUncertaintyBrief(
+            simulations=(
+                baseline_simulation.simulations
+            ),
+            confidence_level=float(
+                baseline_simulation
+                .inputs
+                .confidence_level
+            ),
+            modelled_error_samples_available=(
+                baseline_simulation
+                .modelled_error_samples_available
+            ),
+            committed_timing_events_modelled=(
+                baseline_simulation
+                .committed_timing_events_modelled
+            ),
+            reserve_breach_probability=float(
+                baseline_simulation
+                .shortfall_probability
+            ),
+            first_week_reserve_breach_probability=float(
+                baseline_simulation
+                .first_week_shortfall_probability
+            ),
+            maximum_acceptable_breach_probability=float(
+                maximum_acceptable_breach_probability
+            ),
+            within_risk_appetite=(
+                baseline_simulation
+                .shortfall_probability
+                <= maximum_acceptable_breach_probability
+            ),
+            median_end_cash=float(
+                baseline_simulation.median_end_cash
+            ),
+            p10_end_cash=float(
+                baseline_simulation.p10_end_cash
+            ),
+            p90_end_cash=float(
+                baseline_simulation.p90_end_cash
+            ),
+            median_min_cash=float(
+                baseline_simulation.median_min_cash
+            ),
+            p10_min_cash=float(
+                baseline_simulation.p10_min_cash
+            ),
+            liquidity_buffer_at_confidence=float(
+                baseline_simulation
+                .liquidity_buffer_at_confidence
+            ),
+            expected_tail_buffer=float(
+                baseline_simulation
+                .expected_tail_buffer
+            ),
+            limitations=(
+                baseline_simulation.limitations
+            ),
+        )
+    )
+
     recovery_brief = (
         None
         if recovery_evaluation is None
@@ -877,6 +1054,7 @@ def build_liquidity_decision_brief(
             .start_date
         ),
         position=position,
+        uncertainty=uncertainty_brief,
         cash_drivers=_build_cash_drivers(
             snapshot,
             max_cash_drivers=(
