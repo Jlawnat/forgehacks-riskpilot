@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from math import ceil
 
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field
 
+from src.core.receivables import (
+    fractional_receivable_delay_adjustments,
+)
 from src.core.context import (
     ForecastContext,
     build_forecast_context,
@@ -90,42 +92,6 @@ class LiquiditySimulationResult(BaseModel):
         LiquidityQuantilePoint
     ]
 
-
-def _receivable_adjustments(
-    latest_receivables: float,
-    delay_days: int,
-    horizon: int,
-) -> np.ndarray:
-    adjustments = np.zeros(
-        horizon,
-        dtype=float,
-    )
-
-    if (
-        delay_days <= 0
-        or latest_receivables <= 0
-    ):
-        return adjustments
-
-    delay_periods = max(
-        1,
-        ceil(
-            delay_days / 30
-        ),
-    )
-
-    adjustments[0] -= (
-        latest_receivables
-    )
-
-    recovery_index = delay_periods
-
-    if recovery_index < horizon:
-        adjustments[
-            recovery_index
-        ] += latest_receivables
-
-    return adjustments
 
 
 def simulate_liquidity_from_context(
@@ -248,12 +214,13 @@ def simulate_liquidity_from_context(
         + config.cost_change
     )
 
-    receivable_adjustments = (
-        _receivable_adjustments(
+    receivable_adjustments = np.asarray(
+        fractional_receivable_delay_adjustments(
             context.latest_receivables,
             config.receivable_delay_days,
             config.horizon,
-        )
+        ),
+        dtype=float,
     )
 
     net_cash_flows = (

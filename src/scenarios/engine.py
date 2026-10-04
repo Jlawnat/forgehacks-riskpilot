@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import ceil
 
 from pydantic import BaseModel, Field
 import pandas as pd
 
 from src.forecasting.forecast import forecast_metric
+from src.core.receivables import (
+    fractional_receivable_delay_adjustments,
+)
 from src.core.context import (
     ForecastContext,
     build_forecast_context,
@@ -154,27 +156,6 @@ def _first_negative_period(
     return None
 
 
-def _receivable_adjustments(
-    latest_receivables: float,
-    delay_days: int,
-    horizon: int,
-) -> list[float]:
-    adjustments = [0.0] * horizon
-
-    if delay_days <= 0 or latest_receivables <= 0:
-        return adjustments
-
-    delay_periods = max(1, ceil(delay_days / 30))
-
-    adjustments[0] -= latest_receivables
-
-    recovery_index = delay_periods
-
-    if recovery_index < horizon:
-        adjustments[recovery_index] += latest_receivables
-
-    return adjustments
-
 
 def run_scenario_from_context(
     context: ScenarioContext,
@@ -198,7 +179,7 @@ def run_scenario_from_context(
         for value in baseline_cost
     ]
 
-    receivable_adjustments = _receivable_adjustments(
+    receivable_adjustments = fractional_receivable_delay_adjustments(
         context.latest_receivables,
         scenario.receivable_delay_days,
         scenario.horizon,
