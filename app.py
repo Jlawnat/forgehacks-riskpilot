@@ -7,6 +7,7 @@ import streamlit as st
 from src.analytics.metrics import calculate_business_metrics
 from src.analytics.risk import assess_business_risk
 from src.forecasting.forecast import forecast_metric
+from src.forecasting.validation import evaluate_models
 from src.ingestion.loader import (
     load_business_csv,
     normalize_business_dataframe,
@@ -19,10 +20,94 @@ from src.scenarios.recovery import build_recovery_plan
 
 st.set_page_config(
     page_title="RiskPilot",
-    page_icon="📊",
+    page_icon="◈",
     layout="wide",
 )
 
+
+# ---------------------------------------------------------------------
+# STYLE
+# ---------------------------------------------------------------------
+
+st.markdown(
+    """
+    <style>
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+        max-width: 1500px;
+    }
+
+    .riskpilot-hero {
+        padding: 1.2rem 1.4rem;
+        border: 1px solid #e7e7e7;
+        border-radius: 14px;
+        margin-bottom: 1rem;
+        background: linear-gradient(
+            135deg,
+            rgba(245,247,250,1) 0%,
+            rgba(255,255,255,1) 100%
+        );
+    }
+
+    .riskpilot-title {
+        font-size: 2.5rem;
+        font-weight: 750;
+        margin-bottom: 0.15rem;
+    }
+
+    .riskpilot-subtitle {
+        color: #666;
+        font-size: 1rem;
+    }
+
+    .risk-card {
+        border: 1px solid #e6e6e6;
+        border-radius: 12px;
+        padding: 1rem;
+        height: 100%;
+        background: white;
+    }
+
+    .risk-card-label {
+        color: #6c6c6c;
+        font-size: 0.85rem;
+        margin-bottom: 0.3rem;
+    }
+
+    .risk-card-value {
+        font-size: 1.7rem;
+        font-weight: 700;
+    }
+
+    .risk-high {
+        color: #b42318;
+        font-weight: 700;
+    }
+
+    .risk-medium {
+        color: #b76e00;
+        font-weight: 700;
+    }
+
+    .risk-low {
+        color: #027a48;
+        font-weight: 700;
+    }
+
+    .small-note {
+        color: #777;
+        font-size: 0.82rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ---------------------------------------------------------------------
+# HELPERS
+# ---------------------------------------------------------------------
 
 def money(value: float | None) -> str:
     if value is None:
@@ -39,20 +124,29 @@ def percent(value: float | None) -> str:
     return f"{value * 100:.1f}%"
 
 
-def risk_label(level: str) -> str:
-    return level.upper()
+def risk_class(level: str) -> str:
+    return f"risk-{level.lower()}"
 
 
-st.title("RiskPilot")
-st.caption(
-    "Explainable AI-ready business risk intelligence: "
-    "forecast, stress-test, and plan before cash pressure becomes a crisis."
-)
+def risk_numeric(level: str) -> int:
+    return {
+        "low": 25,
+        "medium": 55,
+        "high": 85,
+    }[level]
 
-st.info(
-    "RiskPilot is a decision-support prototype. "
-    "It does not provide accounting, tax, legal, or investment advice."
-)
+
+def card(label: str, value: str, extra: str = "") -> None:
+    st.markdown(
+        f"""
+        <div class="risk-card">
+            <div class="risk-card-label">{label}</div>
+            <div class="risk-card-value">{value}</div>
+            <div class="small-note">{extra}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ---------------------------------------------------------------------
@@ -62,33 +156,29 @@ st.info(
 st.sidebar.header("Business data")
 
 source = st.sidebar.radio(
-    "Choose a data source",
-    [
-        "Try demo business",
-        "Upload CSV",
-    ],
+    "Data source",
+    ["Demo business", "Upload CSV"],
 )
 
 try:
-    if source == "Try demo business":
+    if source == "Demo business":
         raw_df = load_business_csv(
             "data/demo/fragile_business.csv"
         )
 
         st.sidebar.success(
-            "Loaded demo: Fragile Business"
+            "Demo loaded: Fragile Business"
         )
 
     else:
         uploaded = st.sidebar.file_uploader(
-            "Upload business CSV",
+            "Upload a CSV",
             type=["csv"],
         )
 
         if uploaded is None:
             st.warning(
-                "Upload a CSV or choose the demo business "
-                "from the sidebar."
+                "Upload a business CSV or select the demo."
             )
             st.stop()
 
@@ -96,10 +186,12 @@ try:
             pd.read_csv(uploaded)
         )
 
-    df, data_quality = validate_business_data(raw_df)
+    df, data_quality = validate_business_data(
+        raw_df
+    )
 
 except Exception as exc:
-    st.error(f"Could not analyse the data: {exc}")
+    st.error(f"Data validation failed: {exc}")
     st.stop()
 
 
@@ -108,83 +200,278 @@ risks = assess_business_risk(metrics)
 
 
 # ---------------------------------------------------------------------
-# MAIN TABS
+# PRECOMPUTE FORECAST INTELLIGENCE
 # ---------------------------------------------------------------------
 
-overview_tab, forecast_tab, stress_tab = st.tabs(
+revenue_forecast = None
+cost_forecast = None
+revenue_scores = []
+
+try:
+    revenue_forecast = forecast_metric(
+        df,
+        "revenue",
+        horizon=3,
+    )
+
+    cost_forecast = forecast_metric(
+        df,
+        "operating_cost",
+        horizon=3,
+    )
+
+    revenue_scores = evaluate_models(
+        df["revenue"].astype(float)
+    )
+
+except Exception:
+    pass
+
+
+baseline_outlook = None
+
+try:
+    baseline_outlook = run_scenario(
+        df,
+        ScenarioInput(horizon=6),
+    )
+except Exception:
+    pass
+
+
+# ---------------------------------------------------------------------
+# HERO
+# ---------------------------------------------------------------------
+
+st.markdown(
+    """
+    <div class="riskpilot-hero">
+        <div class="riskpilot-title">RiskPilot</div>
+        <div class="riskpilot-subtitle">
+            Explainable business risk intelligence combining
+            forecasting, stress testing, liquidity analysis,
+            recovery optimisation and AI-assisted decision support.
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.caption(
+    "Decision-support prototype only. "
+    "Not accounting, tax, legal or investment advice."
+)
+
+
+command_tab, forecast_tab, stress_tab, diagnostics_tab = st.tabs(
     [
-        "Business Health",
-        "Forecast",
+        "Command Center",
+        "Forecast Intelligence",
         "Stress Lab",
+        "Model & Data",
     ]
 )
 
 
-# ---------------------------------------------------------------------
-# BUSINESS HEALTH
-# ---------------------------------------------------------------------
+# =====================================================================
+# COMMAND CENTER
+# =====================================================================
 
-with overview_tab:
-    st.subheader("Current business health")
+with command_tab:
+    st.subheader("Executive Risk Command Center")
 
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric(
-        "Overall risk",
-        risk_label(risks.overall_risk),
+    failure_period = (
+        baseline_outlook.baseline_first_negative_period
+        if baseline_outlook is not None
+        else None
     )
 
-    col2.metric(
-        "Latest cash",
-        money(metrics.latest_cash_balance),
+    forecast_failure = (
+        f"Period {failure_period}"
+        if failure_period is not None
+        else "Not within horizon"
     )
 
-    runway_text = (
-        f"{metrics.cash_runway_months:.1f} months"
-        if metrics.cash_runway_months is not None
-        else "No current burn"
-    )
+    model_gain = None
 
-    col3.metric(
-        "Historical run-rate runway",
-        runway_text,
-    )
-
-    col4.metric(
-        "Recent revenue trend",
-        percent(metrics.revenue_growth),
-    )
-
-    st.subheader("Risk dimensions")
-
-    risk_df = pd.DataFrame(
-        {
-            "Risk area": [
-                "Liquidity",
-                "Revenue",
-                "Cost pressure",
-                "Receivables",
-            ],
-            "Status": [
-                risks.liquidity_risk.upper(),
-                risks.revenue_risk.upper(),
-                risks.cost_pressure_risk.upper(),
-                risks.receivables_risk.upper(),
-            ],
+    if revenue_scores:
+        score_lookup = {
+            item.name: item.mae
+            for item in revenue_scores
         }
-    )
 
-    st.dataframe(
-        risk_df,
-        hide_index=True,
-        use_container_width=True,
-    )
+        naive_mae = score_lookup.get("naive")
 
-    st.subheader("Financial trajectory")
+        if (
+            naive_mae is not None
+            and naive_mae > 0
+            and revenue_forecast is not None
+        ):
+            model_gain = (
+                (
+                    naive_mae
+                    - revenue_forecast.validation_mae
+                )
+                / naive_mae
+            )
 
-    fig = go.Figure()
+    c1, c2, c3, c4, c5 = st.columns(5)
 
-    fig.add_trace(
+    with c1:
+        card(
+            "Overall risk",
+            risks.overall_risk.upper(),
+            "Deterministic risk assessment",
+        )
+
+    with c2:
+        card(
+            "Current cash",
+            money(metrics.latest_cash_balance),
+            "Latest observed balance",
+        )
+
+    with c3:
+        card(
+            "Run-rate runway",
+            (
+                f"{metrics.cash_runway_months:.1f} mo"
+                if metrics.cash_runway_months is not None
+                else "No current burn"
+            ),
+            "Historical recent burn",
+        )
+
+    with c4:
+        card(
+            "Forecast cash failure",
+            forecast_failure,
+            "Forward baseline scenario",
+        )
+
+    with c5:
+        card(
+            "Forecast advantage",
+            (
+                percent(model_gain)
+                if model_gain is not None
+                else "N/A"
+            ),
+            "MAE improvement vs naive",
+        )
+
+    st.divider()
+
+    left, right = st.columns([1.05, 1])
+
+    with left:
+        st.markdown("### Risk map")
+
+        dimension_levels = {
+            "Liquidity": risks.liquidity_risk,
+            "Revenue": risks.revenue_risk,
+            "Cost pressure": risks.cost_pressure_risk,
+            "Receivables": risks.receivables_risk,
+        }
+
+        risk_chart = go.Figure(
+            go.Bar(
+                x=[
+                    risk_numeric(level)
+                    for level in dimension_levels.values()
+                ],
+                y=list(dimension_levels.keys()),
+                orientation="h",
+                text=[
+                    level.upper()
+                    for level in dimension_levels.values()
+                ],
+                textposition="inside",
+            )
+        )
+
+        risk_chart.update_layout(
+            xaxis=dict(
+                title="Risk intensity",
+                range=[0, 100],
+            ),
+            yaxis_title="",
+            height=310,
+            margin=dict(l=10, r=10, t=20, b=30),
+        )
+
+        st.plotly_chart(
+            risk_chart,
+            use_container_width=True,
+        )
+
+    with right:
+        st.markdown("### Key observations")
+
+        observations = []
+
+        if (
+            metrics.cost_to_revenue_ratio is not None
+            and metrics.cost_to_revenue_ratio >= 1
+        ):
+            observations.append(
+                "Operating costs currently exceed revenue."
+            )
+
+        if (
+            metrics.revenue_growth is not None
+            and metrics.revenue_growth < 0
+        ):
+            observations.append(
+                "Recent revenue momentum is negative "
+                f"({percent(metrics.revenue_growth)})."
+            )
+
+        if (
+            metrics.cash_runway_months is not None
+            and metrics.cash_runway_months < 3
+        ):
+            observations.append(
+                "Historical run-rate cash runway is below "
+                "three months."
+            )
+
+        receivable_ratio = (
+            metrics.latest_receivables
+            / metrics.latest_revenue
+            if metrics.latest_revenue > 0
+            else None
+        )
+
+        if (
+            receivable_ratio is not None
+            and receivable_ratio >= 0.6
+        ):
+            observations.append(
+                "Receivables are unusually large relative "
+                "to current revenue."
+            )
+
+        if failure_period is not None:
+            observations.append(
+                "Baseline forecast indicates cash may turn "
+                f"negative in period {failure_period}."
+            )
+
+        for obs in observations:
+            st.warning(obs)
+
+        if not observations:
+            st.success(
+                "No major deterministic warning conditions "
+                "were triggered."
+            )
+
+    st.markdown("### Financial trajectory")
+
+    trajectory_fig = go.Figure()
+
+    trajectory_fig.add_trace(
         go.Scatter(
             x=df["date"],
             y=df["revenue"],
@@ -193,7 +480,7 @@ with overview_tab:
         )
     )
 
-    fig.add_trace(
+    trajectory_fig.add_trace(
         go.Scatter(
             x=df["date"],
             y=df["operating_cost"],
@@ -202,7 +489,7 @@ with overview_tab:
         )
     )
 
-    fig.add_trace(
+    trajectory_fig.add_trace(
         go.Scatter(
             x=df["date"],
             y=df["cash_balance"],
@@ -211,241 +498,285 @@ with overview_tab:
         )
     )
 
-    fig.update_layout(
+    trajectory_fig.update_layout(
+        hovermode="x unified",
         xaxis_title="Date",
         yaxis_title="Amount",
-        hovermode="x unified",
+        height=430,
     )
 
     st.plotly_chart(
-        fig,
+        trajectory_fig,
         use_container_width=True,
     )
 
-    with st.expander("Data quality"):
-        st.write(
-            f"**Periods loaded:** "
-            f"{data_quality.periods_loaded}"
-        )
 
-        st.write(
-            f"**Coverage:** "
-            f"{data_quality.start_date} → "
-            f"{data_quality.end_date}"
-        )
-
-        st.write(
-            f"**Detected frequency:** "
-            f"{data_quality.frequency}"
-        )
-
-        st.write(
-            f"**Missing numeric values:** "
-            f"{data_quality.missing_values}"
-        )
-
-        st.write(
-            f"**Duplicate periods:** "
-            f"{data_quality.duplicate_periods}"
-        )
-
-        if data_quality.warnings:
-            for warning in data_quality.warnings:
-                st.warning(warning)
-        else:
-            st.success(
-                "No critical data-quality warnings."
-            )
-
-
-# ---------------------------------------------------------------------
-# FORECAST
-# ---------------------------------------------------------------------
+# =====================================================================
+# FORECAST INTELLIGENCE
+# =====================================================================
 
 with forecast_tab:
-    st.subheader("Forward outlook")
+    st.subheader("Forecast Intelligence")
 
-    try:
-        revenue_forecast = forecast_metric(
-            df,
-            "revenue",
-            horizon=3,
+    if revenue_forecast is None:
+        st.warning(
+            "Forecasting is unavailable for this dataset."
         )
 
-        cost_forecast = forecast_metric(
-            df,
-            "operating_cost",
-            horizon=3,
-        )
-
-        f1, f2, f3 = st.columns(3)
+    else:
+        f1, f2, f3, f4 = st.columns(4)
 
         f1.metric(
-            "Revenue model",
+            "Champion model",
             revenue_forecast.selected_model.upper(),
         )
 
         f2.metric(
-            "Revenue validation MAE",
+            "Validation MAE",
             money(revenue_forecast.validation_mae),
         )
 
         f3.metric(
-            "3-period revenue forecast",
+            "Forecast revenue +3",
             money(
                 revenue_forecast.forecasts[-1].value
             ),
         )
 
-        forecast_df = pd.DataFrame(
-            {
-                "Period": [
-                    f"+{point.period}"
-                    for point
-                    in revenue_forecast.forecasts
-                ],
-                "Revenue": [
-                    point.value
-                    for point
-                    in revenue_forecast.forecasts
-                ],
-                "Lower": [
-                    point.lower
-                    for point
-                    in revenue_forecast.forecasts
-                ],
-                "Upper": [
-                    point.upper
-                    for point
-                    in revenue_forecast.forecasts
-                ],
-                "Operating cost": [
-                    point.value
-                    for point
-                    in cost_forecast.forecasts
-                ],
-            }
+        f4.metric(
+            "Recent revenue trend",
+            percent(metrics.revenue_growth),
         )
 
-        fig = go.Figure()
+        st.markdown("### Model validation leaderboard")
 
-        fig.add_trace(
+        naive_mae = next(
+            (
+                item.mae
+                for item in revenue_scores
+                if item.name == "naive"
+            ),
+            None,
+        )
+
+        leaderboard_rows = []
+
+        for score in revenue_scores:
+            improvement = None
+
+            if naive_mae and naive_mae > 0:
+                improvement = (
+                    naive_mae - score.mae
+                ) / naive_mae
+
+            leaderboard_rows.append(
+                {
+                    "Model": score.name.upper(),
+                    "Rolling MAE": score.mae,
+                    "Improvement vs naive":
+                        (
+                            improvement * 100
+                            if improvement is not None
+                            else None
+                        ),
+                    "Selected":
+                        "YES"
+                        if score.name
+                        == revenue_forecast.selected_model
+                        else "",
+                }
+            )
+
+        st.dataframe(
+            pd.DataFrame(leaderboard_rows),
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "Rolling MAE":
+                    st.column_config.NumberColumn(
+                        format="$%.0f"
+                    ),
+                "Improvement vs naive":
+                    st.column_config.NumberColumn(
+                        format="%.1f%%"
+                    ),
+            },
+        )
+
+        st.markdown("### Actual + forecast")
+
+        historical_labels = [
+            value.strftime("%Y-%m")
+            for value in df["date"].tail(8)
+        ]
+
+        future_labels = [
+            f"F+{point.period}"
+            for point in revenue_forecast.forecasts
+        ]
+
+        x_values = (
+            historical_labels
+            + future_labels
+        )
+
+        historical_values = list(
+            df["revenue"].tail(8).astype(float)
+        )
+
+        actual_series = (
+            historical_values
+            + [None] * len(future_labels)
+        )
+
+        forecast_series = (
+            [None] * (len(historical_values) - 1)
+            + [historical_values[-1]]
+            + [
+                point.value
+                for point in revenue_forecast.forecasts
+            ]
+        )
+
+        lower_series = (
+            [None] * len(historical_values)
+            + [
+                point.lower
+                for point in revenue_forecast.forecasts
+            ]
+        )
+
+        upper_series = (
+            [None] * len(historical_values)
+            + [
+                point.upper
+                for point in revenue_forecast.forecasts
+            ]
+        )
+
+        forecast_fig = go.Figure()
+
+        forecast_fig.add_trace(
             go.Scatter(
-                x=forecast_df["Period"],
-                y=forecast_df["Upper"],
+                x=x_values,
+                y=actual_series,
+                mode="lines+markers",
+                name="Observed revenue",
+            )
+        )
+
+        forecast_fig.add_trace(
+            go.Scatter(
+                x=x_values,
+                y=upper_series,
                 mode="lines",
                 line=dict(width=0),
                 showlegend=False,
             )
         )
 
-        fig.add_trace(
+        forecast_fig.add_trace(
             go.Scatter(
-                x=forecast_df["Period"],
-                y=forecast_df["Lower"],
+                x=x_values,
+                y=lower_series,
                 mode="lines",
                 fill="tonexty",
-                name="Revenue uncertainty",
+                name="Forecast uncertainty",
             )
         )
 
-        fig.add_trace(
+        forecast_fig.add_trace(
             go.Scatter(
-                x=forecast_df["Period"],
-                y=forecast_df["Revenue"],
+                x=x_values,
+                y=forecast_series,
                 mode="lines+markers",
-                name="Forecast revenue",
+                name="Selected-model forecast",
             )
         )
 
-        fig.add_trace(
-            go.Scatter(
-                x=forecast_df["Period"],
-                y=forecast_df["Operating cost"],
-                mode="lines+markers",
-                name="Forecast operating cost",
-            )
-        )
-
-        fig.update_layout(
-            xaxis_title="Forecast period",
-            yaxis_title="Amount",
+        forecast_fig.update_layout(
             hovermode="x unified",
+            yaxis_title="Revenue",
+            xaxis_title="Observed → forecast periods",
+            height=470,
         )
 
         st.plotly_chart(
-            fig,
+            forecast_fig,
             use_container_width=True,
         )
 
-        st.caption(
-            "RiskPilot evaluates candidate forecasting models "
-            "using rolling validation and selects the model "
-            "with the lowest validation error."
-        )
-
-    except Exception as exc:
-        st.warning(
-            f"Forecast unavailable: {exc}"
+        st.info(
+            "RiskPilot uses rolling one-step validation to "
+            "compare candidate forecasting models before "
+            "selecting the champion model."
         )
 
 
-# ---------------------------------------------------------------------
+# =====================================================================
 # STRESS LAB
-# ---------------------------------------------------------------------
+# =====================================================================
 
 with stress_tab:
     st.subheader("Stress Lab")
 
     st.write(
-        "Test how changes in revenue, operating costs, "
-        "and receivable timing affect future cash."
+        "Simulate revenue shocks, cost inflation and "
+        "receivable delays. RiskPilot recomputes cash "
+        "trajectory, liquidity failure and recovery options."
     )
 
     with st.form("stress_form"):
-        revenue_change_pct = st.slider(
-            "Revenue change",
-            min_value=-50,
-            max_value=25,
-            value=-15,
-            step=1,
-            format="%d%%",
-        )
+        s1, s2, s3, s4 = st.columns(4)
 
-        cost_change_pct = st.slider(
-            "Operating cost change",
-            min_value=-20,
-            max_value=50,
-            value=10,
-            step=1,
-            format="%d%%",
-        )
+        with s1:
+            revenue_change_pct = st.slider(
+                "Revenue shock",
+                min_value=-50,
+                max_value=25,
+                value=-15,
+                step=1,
+                format="%d%%",
+            )
 
-        receivable_delay_days = st.slider(
-            "Receivable collection delay",
-            min_value=0,
-            max_value=90,
-            value=30,
-            step=15,
-            format="%d days",
-        )
+        with s2:
+            cost_change_pct = st.slider(
+                "Cost shock",
+                min_value=-20,
+                max_value=50,
+                value=10,
+                step=1,
+                format="%d%%",
+            )
 
-        horizon = st.slider(
-            "Forecast horizon",
-            min_value=3,
-            max_value=6,
-            value=3,
-            step=1,
-        )
+        with s3:
+            receivable_delay_days = st.slider(
+                "Receivable delay",
+                min_value=0,
+                max_value=90,
+                value=30,
+                step=15,
+                format="%d days",
+            )
+
+        with s4:
+            horizon = st.slider(
+                "Forecast horizon",
+                min_value=3,
+                max_value=6,
+                value=3,
+                step=1,
+            )
 
         run_stress = st.form_submit_button(
-            "Run stress test",
+            "Run Stress Simulation",
             use_container_width=True,
         )
 
     if run_stress:
         with st.spinner(
-            "Running forecast and stress analysis..."
+            "Running forecasts, scenario engine, "
+            "liquidity decomposition and recovery optimiser..."
         ):
             scenario = ScenarioInput(
                 revenue_change=(
@@ -479,172 +810,283 @@ with stress_tab:
         st.session_state["scenario_result"] = (
             scenario_result
         )
+
         st.session_state["decomposition"] = (
             decomposition
         )
-        st.session_state["recovery"] = recovery
+
+        st.session_state["recovery"] = (
+            recovery
+        )
 
     if "scenario_result" in st.session_state:
-        scenario_result = (
-            st.session_state["scenario_result"]
-        )
+        result = st.session_state[
+            "scenario_result"
+        ]
 
-        decomposition = (
-            st.session_state["decomposition"]
-        )
+        decomposition = st.session_state[
+            "decomposition"
+        ]
 
-        recovery = (
-            st.session_state["recovery"]
-        )
+        recovery = st.session_state[
+            "recovery"
+        ]
 
-        st.subheader("Stress result")
+        st.markdown("### Stress result")
 
-        c1, c2, c3, c4 = st.columns(4)
+        r1, r2, r3, r4, r5 = st.columns(5)
 
-        c1.metric(
+        r1.metric(
             "Baseline end cash",
-            money(
-                scenario_result.baseline_end_cash
-            ),
+            money(result.baseline_end_cash),
         )
 
-        c2.metric(
+        r2.metric(
             "Stressed end cash",
-            money(
-                scenario_result.stressed_end_cash
-            ),
+            money(result.stressed_end_cash),
         )
 
-        c3.metric(
+        r3.metric(
             "Peak liquidity gap",
-            money(
-                scenario_result.peak_liquidity_gap
+            money(result.peak_liquidity_gap),
+        )
+
+        r4.metric(
+            "Baseline failure",
+            (
+                f"Period "
+                f"{result.baseline_first_negative_period}"
+                if result.baseline_first_negative_period
+                else "None"
             ),
         )
 
-        failure_text = (
-            f"Period "
-            f"{scenario_result.stressed_first_negative_period}"
-            if (
-                scenario_result
-                .stressed_first_negative_period
-                is not None
-            )
-            else "No failure"
+        r5.metric(
+            "Stressed failure",
+            (
+                f"Period "
+                f"{result.stressed_first_negative_period}"
+                if result.stressed_first_negative_period
+                else "None"
+            ),
         )
 
-        c4.metric(
-            "First cash failure",
-            failure_text,
-        )
+        st.markdown("### Cash trajectory")
 
         trajectory_df = pd.DataFrame(
             {
                 "Period": [
                     point.period
-                    for point
-                    in scenario_result.trajectory
+                    for point in result.trajectory
                 ],
-                "Baseline cash": [
+                "Baseline": [
                     point.baseline_cash
-                    for point
-                    in scenario_result.trajectory
+                    for point in result.trajectory
                 ],
-                "Stressed cash": [
+                "Stressed": [
                     point.stressed_cash
-                    for point
-                    in scenario_result.trajectory
+                    for point in result.trajectory
                 ],
             }
         )
 
-        fig = go.Figure()
+        cash_fig = go.Figure()
 
-        fig.add_trace(
+        cash_fig.add_trace(
             go.Scatter(
                 x=trajectory_df["Period"],
-                y=trajectory_df["Baseline cash"],
+                y=trajectory_df["Baseline"],
                 mode="lines+markers",
                 name="Baseline cash",
             )
         )
 
-        fig.add_trace(
+        cash_fig.add_trace(
             go.Scatter(
                 x=trajectory_df["Period"],
-                y=trajectory_df["Stressed cash"],
+                y=trajectory_df["Stressed"],
                 mode="lines+markers",
                 name="Stressed cash",
             )
         )
 
-        fig.add_hline(
+        cash_fig.add_hline(
             y=0,
             line_dash="dash",
         )
 
-        fig.update_layout(
+        cash_fig.update_layout(
             xaxis_title="Forecast period",
             yaxis_title="Cash balance",
+            height=430,
         )
 
         st.plotly_chart(
-            fig,
+            cash_fig,
             use_container_width=True,
         )
 
-        st.subheader("What is driving the risk?")
+        dleft, dright = st.columns(2)
 
-        driver_df = pd.DataFrame(
-            {
-                "Driver": [
-                    item.driver.replace(
-                        "_",
-                        " ",
-                    ).title()
-                    for item
-                    in decomposition.drivers
-                ],
-                "Peak liquidity impact": [
-                    item.peak_liquidity_impact
-                    for item
-                    in decomposition.drivers
-                ],
-                "Contribution": [
-                    item.contribution_share * 100
-                    for item
-                    in decomposition.drivers
-                ],
-            }
-        )
+        with dleft:
+            st.markdown("### Peak-liquidity drivers")
 
-        st.dataframe(
-            driver_df,
-            hide_index=True,
-            use_container_width=True,
-            column_config={
-                "Peak liquidity impact":
-                    st.column_config.NumberColumn(
-                        format="$%.0f"
-                    ),
-                "Contribution":
-                    st.column_config.NumberColumn(
-                        format="%.1f%%"
-                    ),
-            },
-        )
+            driver_names = [
+                item.driver.replace(
+                    "_",
+                    " ",
+                ).title()
+                for item in decomposition.drivers
+            ]
 
-        st.subheader("Recovery Planner")
+            driver_values = [
+                item.peak_liquidity_impact
+                for item in decomposition.drivers
+            ]
+
+            driver_fig = go.Figure(
+                go.Bar(
+                    x=driver_values,
+                    y=driver_names,
+                    orientation="h",
+                    text=[
+                        f"{item.contribution_share * 100:.1f}%"
+                        for item
+                        in decomposition.drivers
+                    ],
+                    textposition="auto",
+                )
+            )
+
+            driver_fig.update_layout(
+                xaxis_title="Liquidity impact",
+                yaxis_title="",
+                height=330,
+            )
+
+            st.plotly_chart(
+                driver_fig,
+                use_container_width=True,
+            )
+
+        with dright:
+            st.markdown("### Shock waterfall")
+
+            waterfall_fig = go.Figure(
+                go.Waterfall(
+                    orientation="v",
+                    measure=[
+                        "relative",
+                        "relative",
+                        "relative",
+                        "total",
+                    ],
+                    x=[
+                        "Revenue shock",
+                        "Cost shock",
+                        "Receivable delay",
+                        "Peak gap",
+                    ],
+                    y=[
+                        -next(
+                            item.peak_liquidity_impact
+                            for item
+                            in decomposition.drivers
+                            if item.driver
+                            == "revenue_shock"
+                        ),
+                        -next(
+                            item.peak_liquidity_impact
+                            for item
+                            in decomposition.drivers
+                            if item.driver
+                            == "cost_shock"
+                        ),
+                        -next(
+                            item.peak_liquidity_impact
+                            for item
+                            in decomposition.drivers
+                            if item.driver
+                            == "receivable_delay"
+                        ),
+                        -decomposition.peak_liquidity_gap,
+                    ],
+                )
+            )
+
+            waterfall_fig.update_layout(
+                yaxis_title="Cash impact",
+                height=330,
+            )
+
+            st.plotly_chart(
+                waterfall_fig,
+                use_container_width=True,
+            )
+
+        st.markdown("### Recovery Optimizer")
 
         if recovery.operational_recovery_possible:
             st.success(
-                "RiskPilot found an operating response "
-                "that restores the selected cash target."
+                "A practical operating response can "
+                "restore the cash target."
             )
         else:
             st.warning(
-                "Practical operating changes alone are "
-                "not enough under this scenario."
+                "Operating changes within practical limits "
+                "are not enough to fully restore liquidity."
+            )
+
+        best_mix = next(
+            (
+                action
+                for action in recovery.actions
+                if action.action
+                == "best_operating_mix"
+            ),
+            None,
+        )
+
+        liquidity = next(
+            (
+                action
+                for action in recovery.actions
+                if action.action
+                == "liquidity_buffer"
+            ),
+            None,
+        )
+
+        if best_mix is not None:
+            b1, b2, b3 = st.columns(3)
+
+            b1.metric(
+                "Revenue improvement",
+                (
+                    f"{best_mix.components.get('revenue_improvement_pct', 0):.0f}%"
+                ),
+            )
+
+            b2.metric(
+                "Cost reduction",
+                (
+                    f"{best_mix.components.get('cost_reduction_pct', 0):.0f}%"
+                ),
+            )
+
+            b3.metric(
+                "Collections accelerated",
+                (
+                    f"{best_mix.components.get('receivable_days_faster', 0):.0f} days"
+                ),
+            )
+
+            st.info(best_mix.explanation)
+
+        if liquidity is not None:
+            st.error(
+                "Remaining external liquidity required: "
+                f"**{money(liquidity.magnitude)}**"
             )
 
         recovery_rows = []
@@ -652,15 +1094,15 @@ with stress_tab:
         for action in recovery.actions:
             recovery_rows.append(
                 {
-                    "Action":
+                    "Strategy":
                         action.action.replace(
                             "_",
                             " ",
                         ).title(),
                     "Feasible":
-                        "Yes"
+                        "YES"
                         if action.feasible
-                        else "No",
+                        else "NO",
                     "Magnitude":
                         (
                             f"{action.magnitude:,.1f} "
@@ -668,7 +1110,7 @@ with stress_tab:
                             if action.magnitude is not None
                             else "—"
                         ),
-                    "Explanation":
+                    "Outcome":
                         action.explanation,
                 }
             )
@@ -679,19 +1121,131 @@ with stress_tab:
             use_container_width=True,
         )
 
-        liquidity_action = next(
-            (
-                item
-                for item in recovery.actions
-                if item.action
-                == "liquidity_buffer"
-            ),
-            None,
+
+# =====================================================================
+# MODEL & DATA DIAGNOSTICS
+# =====================================================================
+
+with diagnostics_tab:
+    st.subheader("Model & Data Diagnostics")
+
+    d1, d2, d3, d4 = st.columns(4)
+
+    d1.metric(
+        "Periods loaded",
+        data_quality.periods_loaded,
+    )
+
+    d2.metric(
+        "Frequency",
+        data_quality.frequency,
+    )
+
+    d3.metric(
+        "Missing values",
+        data_quality.missing_values,
+    )
+
+    d4.metric(
+        "Duplicate periods",
+        data_quality.duplicate_periods,
+    )
+
+    st.markdown("### Input diagnostics")
+
+    st.write(
+        f"**Coverage:** "
+        f"{data_quality.start_date} → "
+        f"{data_quality.end_date}"
+    )
+
+    if data_quality.warnings:
+        for warning in data_quality.warnings:
+            st.warning(warning)
+    else:
+        st.success(
+            "No critical input-quality warnings."
         )
 
-        if liquidity_action is not None:
-            st.error(
-                "Additional liquidity required after "
-                "the strongest practical operating response: "
-                f"**{money(liquidity_action.magnitude)}**"
-            )
+    st.markdown("### Quantitative indicators")
+
+    metrics_df = pd.DataFrame(
+        [
+            {
+                "Metric": "Revenue growth",
+                "Value": percent(
+                    metrics.revenue_growth
+                ),
+            },
+            {
+                "Metric": "Cost / revenue ratio",
+                "Value": (
+                    f"{metrics.cost_to_revenue_ratio:.2f}"
+                    if metrics.cost_to_revenue_ratio
+                    is not None
+                    else "N/A"
+                ),
+            },
+            {
+                "Metric": "Revenue volatility",
+                "Value": percent(
+                    metrics.revenue_volatility
+                ),
+            },
+            {
+                "Metric": "Historical runway",
+                "Value": (
+                    f"{metrics.cash_runway_months:.2f} months"
+                    if metrics.cash_runway_months
+                    is not None
+                    else "N/A"
+                ),
+            },
+            {
+                "Metric": "Receivables / revenue",
+                "Value": (
+                    f"{metrics.latest_receivables / metrics.latest_revenue:.2f}"
+                    if metrics.latest_revenue > 0
+                    else "N/A"
+                ),
+            },
+        ]
+    )
+
+    st.dataframe(
+        metrics_df,
+        hide_index=True,
+        use_container_width=True,
+    )
+
+    st.markdown("### RiskPilot analytical pipeline")
+
+    st.code(
+        """
+Business CSV
+    ↓
+Schema normalization + validation
+    ↓
+Deterministic financial health metrics
+    ↓
+Rolling forecast model validation
+    ↓
+Champion forecast + uncertainty interval
+    ↓
+Scenario stress engine
+    ↓
+Liquidity timing decomposition
+    ↓
+Constrained recovery optimization
+    ↓
+AI Risk Analyst  ← next layer
+        """.strip(),
+        language="text",
+    )
+
+    st.caption(
+        "Financial calculations and scenario outputs are "
+        "computed deterministically in Python. "
+        "The AI layer will interpret these verified outputs "
+        "rather than inventing financial values."
+    )
