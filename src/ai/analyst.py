@@ -14,6 +14,8 @@ from src.ai.tools import (
     get_business_health,
     get_forecast_outlook,
     get_liquidity_risk,
+    get_recovery_options,
+    validate_recovery_options,
     run_reverse_stress,
     run_stress_test,
 )
@@ -63,7 +65,32 @@ STRICT GROUNDING RULES
 9. Be concise and management-oriented. Lead with the decision-relevant
    conclusion, then explain the quantitative evidence.
 
-10. End business-specific answers with a short line:
+10. For questions asking what management should do under a
+    stress scenario, use the recovery optimiser rather than
+    inventing actions. If the user asks whether a plan is safe
+    or adequate, probabilistically validate the shortlisted
+    recovery plans before making the conclusion.
+
+11. Never call a deterministic recovery plan "safe" merely
+    because it restores the minimum-cash target. Distinguish
+    deterministic feasibility from probabilistic adequacy.
+
+12. Format tool-returned values for management readability.
+    Unless the user explicitly requests more precision:
+    - money: nearest whole dollar with commas,
+    - probabilities: one decimal percentage,
+    - percentages: one decimal where useful,
+    - ratios: two decimal places.
+    You may round values for presentation only. Do not change
+    their meaning or perform new financial calculations.
+
+13. Prefer clear labels such as:
+    "deterministic funding",
+    "uncertainty buffer",
+    "risk-adjusted liquidity",
+    and "reserve-breach probability".
+
+14. End business-specific answers with a short line:
     "Evidence used: ..."
     naming the RiskPilot tools you used.
 """.strip()
@@ -91,6 +118,8 @@ def build_risk_analyst() -> Agent[
             get_liquidity_risk,
             run_stress_test,
             run_reverse_stress,
+            get_recovery_options,
+            validate_recovery_options,
         ],
     )
 

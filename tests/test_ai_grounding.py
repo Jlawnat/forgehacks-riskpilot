@@ -157,3 +157,107 @@ def test_reverse_stress_uses_management_reserve(
         ]
         > 0
     )
+
+
+from src.ai.tools import (
+    recovery_options_snapshot,
+    recovery_validation_snapshot,
+)
+
+
+def test_recovery_options_are_grounded(
+    context,
+):
+    snapshot = recovery_options_snapshot(
+        context,
+        revenue_change_pct=-15.0,
+        cost_change_pct=10.0,
+        receivable_delay_days=30,
+    )
+
+    assert snapshot["recovery_available"]
+
+    balanced = snapshot["balanced"]
+
+    assert balanced is not None
+
+    assert (
+        balanced[
+            "resulting_min_cash"
+        ]
+        >= 20000.0
+    )
+
+    assert (
+        snapshot[
+            "candidates_evaluated"
+        ]
+        > 1000
+    )
+
+
+def test_recovery_validation_uses_policy(
+    context,
+):
+    snapshot = recovery_validation_snapshot(
+        context,
+        revenue_change_pct=-15.0,
+        cost_change_pct=10.0,
+        receivable_delay_days=30,
+    )
+
+    assert (
+        snapshot[
+            "maximum_acceptable_breach_probability"
+        ]
+        == pytest.approx(0.05)
+    )
+
+    assert len(snapshot["plans"]) == 3
+
+    for plan in snapshot["plans"]:
+        assert (
+            0.0
+            <= plan[
+                "reserve_breach_probability_after_buffer"
+            ]
+            <= 1.0
+        )
+
+        assert (
+            plan[
+                "risk_adjusted_total_liquidity"
+            ]
+            >= 0.0
+        )
+
+
+def test_balanced_recovery_validation_reaches_appetite(
+    context,
+):
+    snapshot = recovery_validation_snapshot(
+        context,
+        revenue_change_pct=-15.0,
+        cost_change_pct=10.0,
+        receivable_delay_days=30,
+    )
+
+    balanced = next(
+        plan
+        for plan in snapshot["plans"]
+        if plan["plan"] == "Balanced"
+    )
+
+    assert (
+        balanced[
+            "within_appetite_after_buffer"
+        ]
+        is True
+    )
+
+    assert (
+        balanced[
+            "reserve_breach_probability_after_buffer"
+        ]
+        <= 0.051
+    )

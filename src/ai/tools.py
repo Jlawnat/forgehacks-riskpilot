@@ -607,3 +607,401 @@ def run_reverse_stress(
             ctx.context
         )
     )
+
+
+# ============================================================
+# RECOVERY DECISION TOOLS
+# ============================================================
+
+from src.scenarios.recovery_optimizer import (
+    RecoveryOptimizerConfig,
+    RecoveryOption,
+    optimize_recovery_from_context,
+)
+from src.simulation.recovery_validation import (
+    validate_recovery_option_from_context,
+)
+
+
+def _recovery_option_payload(
+    option: RecoveryOption | None,
+) -> dict[str, Any] | None:
+    if option is None:
+        return None
+
+    return {
+        "revenue_improvement_pct":
+            _clean_number(
+                option.revenue_improvement_pct
+            ),
+        "cost_reduction_pct":
+            _clean_number(
+                option.cost_reduction_pct
+            ),
+        "receivable_acceleration_days":
+            option.receivable_acceleration_days,
+        "external_liquidity":
+            _clean_number(
+                option.external_liquidity
+            ),
+        "operating_min_cash":
+            _clean_number(
+                option.operating_min_cash
+            ),
+        "resulting_min_cash":
+            _clean_number(
+                option.resulting_min_cash
+            ),
+        "resulting_end_cash":
+            _clean_number(
+                option.resulting_end_cash
+            ),
+        "reserve_margin":
+            _clean_number(
+                option.reserve_margin
+            ),
+        "operational_disruption_score":
+            _clean_number(
+                option.operational_disruption_score
+            ),
+        "total_intervention_score":
+            _clean_number(
+                option.total_intervention_score
+            ),
+        "maximum_lever_utilisation":
+            _clean_number(
+                option.maximum_lever_utilisation
+            ),
+    }
+
+
+def recovery_options_snapshot(
+    context: RiskAnalystContext,
+    revenue_change_pct: float,
+    cost_change_pct: float,
+    receivable_delay_days: int,
+) -> dict[str, Any]:
+    scenario_context = (
+        scenario_context_from_forecast_context(
+            context.forecast
+        )
+    )
+
+    scenario = ScenarioInput(
+        revenue_change=(
+            revenue_change_pct / 100.0
+        ),
+        cost_change=(
+            cost_change_pct / 100.0
+        ),
+        receivable_delay_days=(
+            receivable_delay_days
+        ),
+        horizon=context.forecast.horizon,
+    )
+
+    result = optimize_recovery_from_context(
+        scenario_context,
+        scenario,
+        RecoveryOptimizerConfig(
+            target_min_cash=(
+                context.policy
+                .minimum_cash_reserve
+            ),
+            max_revenue_improvement_pct=20,
+            max_cost_reduction_pct=15,
+            max_receivable_acceleration_days=90,
+            max_external_liquidity=50000.0,
+            revenue_step_pct=1,
+            cost_step_pct=1,
+            receivable_step_days=1,
+        ),
+    )
+
+    return {
+        "scenario": {
+            "revenue_change_pct":
+                revenue_change_pct,
+            "cost_change_pct":
+                cost_change_pct,
+            "receivable_delay_days":
+                receivable_delay_days,
+            "horizon":
+                context.forecast.horizon,
+        },
+        "management_reserve":
+            context.policy.minimum_cash_reserve,
+        "stressed_min_cash":
+            _clean_number(
+                result.stressed_min_cash
+            ),
+        "initial_reserve_gap":
+            _clean_number(
+                result.initial_reserve_gap
+            ),
+        "candidates_evaluated":
+            result.candidates_evaluated,
+        "recovery_available":
+            result.feasible,
+        "balanced":
+            _recovery_option_payload(
+                result.recommended
+            ),
+        "lowest_funding":
+            _recovery_option_payload(
+                result.lowest_external_liquidity
+            ),
+        "lowest_operational_disruption":
+            _recovery_option_payload(
+                result.lowest_operational_disruption
+            ),
+        "no_external_funding":
+            _recovery_option_payload(
+                result.no_external_liquidity
+            ),
+        "best_effort":
+            _recovery_option_payload(
+                result.best_effort
+            ),
+    }
+
+
+def recovery_validation_snapshot(
+    context: RiskAnalystContext,
+    revenue_change_pct: float,
+    cost_change_pct: float,
+    receivable_delay_days: int,
+) -> dict[str, Any]:
+    scenario_context = (
+        scenario_context_from_forecast_context(
+            context.forecast
+        )
+    )
+
+    scenario = ScenarioInput(
+        revenue_change=(
+            revenue_change_pct / 100.0
+        ),
+        cost_change=(
+            cost_change_pct / 100.0
+        ),
+        receivable_delay_days=(
+            receivable_delay_days
+        ),
+        horizon=context.forecast.horizon,
+    )
+
+    optimization = optimize_recovery_from_context(
+        scenario_context,
+        scenario,
+        RecoveryOptimizerConfig(
+            target_min_cash=(
+                context.policy
+                .minimum_cash_reserve
+            ),
+            max_revenue_improvement_pct=20,
+            max_cost_reduction_pct=15,
+            max_receivable_acceleration_days=90,
+            max_external_liquidity=50000.0,
+            revenue_step_pct=1,
+            cost_step_pct=1,
+            receivable_step_days=1,
+        ),
+    )
+
+    plans = [
+        (
+            "Balanced",
+            optimization.recommended,
+        ),
+        (
+            "Lowest Funding",
+            optimization
+            .lowest_external_liquidity,
+        ),
+        (
+            "Lowest Operational Disruption",
+            optimization
+            .lowest_operational_disruption,
+        ),
+    ]
+
+    validations = []
+
+    for plan_name, option in plans:
+        if option is None:
+            continue
+
+        result = (
+            validate_recovery_option_from_context(
+                context=context.forecast,
+                base_scenario=scenario,
+                option=option,
+                plan_name=plan_name,
+                cash_floor=(
+                    context.policy
+                    .minimum_cash_reserve
+                ),
+                max_shortfall_probability=(
+                    context.policy
+                    .max_shortfall_probability
+                ),
+                simulations=5000,
+                seed=42,
+            )
+        )
+
+        validations.append(
+            {
+                "plan":
+                    plan_name,
+                "deterministic_external_liquidity":
+                    _clean_number(
+                        option.external_liquidity
+                    ),
+                "reserve_breach_probability_before_buffer":
+                    _clean_number(
+                        result
+                        .reserve_breach_probability
+                    ),
+                "maximum_acceptable_breach_probability":
+                    _clean_number(
+                        result
+                        .max_acceptable_breach_probability
+                    ),
+                "within_appetite_before_buffer":
+                    result.within_risk_appetite,
+                "additional_uncertainty_buffer":
+                    _clean_number(
+                        result
+                        .additional_buffer_required
+                    ),
+                "risk_adjusted_total_liquidity":
+                    _clean_number(
+                        result
+                        .risk_adjusted_total_liquidity
+                    ),
+                "reserve_breach_probability_after_buffer":
+                    _clean_number(
+                        result
+                        .risk_adjusted_breach_probability
+                    ),
+                "within_appetite_after_buffer":
+                    result
+                    .risk_adjusted_within_appetite,
+                "risk_adjusted_median_min_cash":
+                    _clean_number(
+                        result
+                        .risk_adjusted_median_min_cash
+                    ),
+                "risk_adjusted_p10_min_cash":
+                    _clean_number(
+                        result
+                        .risk_adjusted_p10_min_cash
+                    ),
+            }
+        )
+
+    return {
+        "scenario": {
+            "revenue_change_pct":
+                revenue_change_pct,
+            "cost_change_pct":
+                cost_change_pct,
+            "receivable_delay_days":
+                receivable_delay_days,
+        },
+        "management_reserve":
+            context.policy.minimum_cash_reserve,
+        "maximum_acceptable_breach_probability":
+            context.policy.max_shortfall_probability,
+        "simulation_method":
+            "paired empirical forecast-error bootstrap",
+        "paired_residuals_available":
+            len(
+                context.forecast.paired_residuals
+            ),
+        "plans":
+            validations,
+    }
+
+
+@tool
+def get_recovery_options(
+    ctx: RunContextWrapper[
+        RiskAnalystContext
+    ],
+    revenue_change_pct: float,
+    cost_change_pct: float,
+    receivable_delay_days: int,
+) -> str:
+    """
+    Find deterministic management recovery alternatives
+    for a specified stress scenario.
+
+    Returns a balanced plan, lowest-funding plan and
+    lowest-operational-disruption plan.
+
+    Args:
+        revenue_change_pct:
+            Revenue shock in percentage points.
+            Example: -15 means revenue falls 15%.
+        cost_change_pct:
+            Cost shock in percentage points.
+            Example: 10 means costs rise 10%.
+        receivable_delay_days:
+            Additional receivable collection delay.
+    """
+
+    ctx.context.record_tool(
+        "get_recovery_options"
+    )
+
+    return _json(
+        recovery_options_snapshot(
+            ctx.context,
+            revenue_change_pct,
+            cost_change_pct,
+            receivable_delay_days,
+        )
+    )
+
+
+@tool
+def validate_recovery_options(
+    ctx: RunContextWrapper[
+        RiskAnalystContext
+    ],
+    revenue_change_pct: float,
+    cost_change_pct: float,
+    receivable_delay_days: int,
+) -> str:
+    """
+    Probabilistically validate RiskPilot's shortlisted
+    recovery alternatives against management risk appetite.
+
+    Use this after get_recovery_options when deciding
+    whether recovery plans remain adequate after forecast
+    uncertainty is considered.
+
+    Args:
+        revenue_change_pct:
+            Revenue shock in percentage points.
+        cost_change_pct:
+            Cost shock in percentage points.
+        receivable_delay_days:
+            Additional collection delay in days.
+    """
+
+    ctx.context.record_tool(
+        "validate_recovery_options"
+    )
+
+    return _json(
+        recovery_validation_snapshot(
+            ctx.context,
+            revenue_change_pct,
+            cost_change_pct,
+            receivable_delay_days,
+        )
+    )
