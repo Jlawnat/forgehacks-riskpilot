@@ -15,6 +15,7 @@ from src.ai.v2_tools import (
     get_v2_cash_evidence,
     get_v2_liquidity_position,
     get_v2_recovery_evidence,
+    run_v2_what_if_scenario,
 )
 
 
@@ -44,6 +45,10 @@ STRICT GROUNDING RULES
    smallest sufficient set of RiskPilot V2 tools.
 
 2. Tool routing:
+   - run_v2_what_if_scenario:
+     supported hypothetical changes to management reserve, modelled
+     residual-sales revenue, modelled variable operating costs, or
+     receivable timing. This tool reruns the verified V2 engines.
    - get_v2_liquidity_position:
      deterministic cash position, reserve/headroom, baseline
      reserve-breach probability, management appetite and buffer.
@@ -56,6 +61,20 @@ STRICT GROUNDING RULES
 
 3. Never calculate, estimate, interpolate, derive or invent
    replacement financial values.
+
+3a. For a supported hypothetical request, always call
+    run_v2_what_if_scenario. Treat its verified brief as the new current
+    evidence for the answer. Never approximate the result. If that tool
+    reports an adjustment unsupported, clearly say so.
+
+3b. After a what-if tool succeeds, call the displayed pre-recovery
+    probability "what-if breach risk" or "scenario breach risk", not
+    "baseline breach risk". Baseline refers to the unchanged selected demo
+    scenario outside the temporary analysis.
+
+3c. When the what-if tool supplies canonical_display_values, quote those
+    percentage strings exactly. Do not independently round the corresponding
+    raw floating-point probabilities.
 
 4. Never silently combine V2 evidence with legacy monthly forecasts,
    policies, stress tests or recovery outputs.
@@ -79,6 +98,18 @@ STRICT GROUNDING RULES
 8. Reserve the terms "deterministically feasible" and
    "probabilistically adequate/inadequate" for recovery-plan
    evaluation only.
+
+8a. Recovery evidence has two distinct outcomes:
+    - current_recovery_plan describes the plan actually specified;
+    - additional_liquidity_requirement describes a conditional result
+      that applies only if the stated additional upfront buffer is added.
+    Never describe breach_probability_with_additional_buffer (the
+    risk-adjusted probability) as the current recovery plan succeeding.
+    If the current plan is deterministically infeasible and its own breach
+    probability remains above appetite, lead with the conclusion that the
+    current recovery plan remains inadequate. Then, if a positive buffer is
+    supplied, say that RiskPilot estimates that additional upfront liquidity
+    would be required to reduce modeled breach risk to the conditional value.
 
 9. Do not discuss recovery-plan feasibility or adequacy unless the
    user's question actually concerns recovery, adequacy, action
@@ -178,6 +209,7 @@ def build_v2_copilot() -> Agent[
             get_v2_cash_evidence,
             get_v2_recovery_evidence,
             get_v2_actions_monitoring,
+            run_v2_what_if_scenario,
         ],
     )
 

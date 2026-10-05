@@ -11,6 +11,12 @@ from src.ai.v2_copilot import (
 from src.core.liquidity_brief import (
     LiquidityDecisionBrief,
 )
+from src.core.v2_what_if import V2WhatIfResult
+from src.demo.v2_scenarios import V2DemoScenario
+
+
+V2_WHAT_IF_RESULT_KEY = "riskpilot_v2_what_if_result"
+V2_WHAT_IF_BASELINE_KEY = "riskpilot_v2_what_if_baseline_id"
 
 
 def _safe_ai_markdown(
@@ -35,12 +41,14 @@ class V2CopilotExecutionResult:
         tools_used: tuple[str, ...] = (),
         error_kind: str | None = None,
         technical_details: str | None = None,
+        what_if_result: V2WhatIfResult | None = None,
     ) -> None:
         self.succeeded = succeeded
         self.answer = answer
         self.tools_used = tools_used
         self.error_kind = error_kind
         self.technical_details = technical_details
+        self.what_if_result = what_if_result
 
 
 def classify_v2_copilot_error(
@@ -78,6 +86,7 @@ def execute_v2_copilot_request(
     brief: LiquidityDecisionBrief,
     question: str,
     *,
+    baseline_scenario: V2DemoScenario | None = None,
     runner=run_v2_copilot,
 ) -> V2CopilotExecutionResult:
     """
@@ -94,7 +103,14 @@ def execute_v2_copilot_request(
         )
 
     context = V2CopilotContext(
-        liquidity_brief=brief
+        liquidity_brief=brief,
+        baseline_scenario=baseline_scenario,
+        what_if_created_at=brief.created_at,
+        what_if_simulations=(
+            brief.uncertainty.simulations
+            if brief.uncertainty is not None
+            else 2000
+        ),
     )
 
     try:
@@ -119,6 +135,7 @@ def execute_v2_copilot_request(
             succeeded=True,
             answer=answer,
             tools_used=response.tools_used,
+            what_if_result=context.what_if_result,
         )
 
     except Exception as exc:
@@ -293,6 +310,37 @@ def reset_copilot_state_for_signature(
     return True
 
 
+def clear_v2_copilot_answer_state(state) -> None:
+    """Clear all answer/provenance state without touching other UI state."""
+    state["riskpilot_v2_ai_question"] = ""
+    for key in (
+        "riskpilot_v2_ai_answer",
+        "riskpilot_v2_ai_tools",
+        "riskpilot_v2_ai_asked_question",
+        "riskpilot_v2_ai_signature",
+    ):
+        state.pop(key, None)
+
+
+def sync_v2_what_if_state(state, baseline_scenario_id: str) -> bool:
+    """Invalidate temporary analysis and AI state on baseline changes."""
+    previous = state.get(V2_WHAT_IF_BASELINE_KEY)
+    if previous == baseline_scenario_id:
+        return False
+
+    state[V2_WHAT_IF_BASELINE_KEY] = baseline_scenario_id
+    state.pop(V2_WHAT_IF_RESULT_KEY, None)
+    clear_v2_copilot_answer_state(state)
+    return True
+
+
+def reset_v2_what_if_state(state, baseline_scenario_id: str) -> None:
+    """Restore the selected immutable baseline and clear stale AI state."""
+    state[V2_WHAT_IF_BASELINE_KEY] = baseline_scenario_id
+    state.pop(V2_WHAT_IF_RESULT_KEY, None)
+    clear_v2_copilot_answer_state(state)
+
+
 def _reset_stale_copilot(
     brief: LiquidityDecisionBrief,
 ) -> None:
@@ -307,6 +355,8 @@ def _reset_stale_copilot(
 def evidence_items_for_tools(
     tools_used: tuple[str, ...],
     brief: LiquidityDecisionBrief,
+    *,
+    is_temporary_what_if: bool = False,
 ) -> tuple[str, ...]:
     """
     Translate actual runtime tool calls into human-readable
@@ -322,8 +372,13 @@ def evidence_items_for_tools(
         )
 
         if brief.uncertainty is not None:
+            uncertainty_label = (
+                "What-if uncertainty simulation"
+                if is_temporary_what_if
+                else "Baseline uncertainty simulation"
+            )
             items.append(
-                "Baseline uncertainty simulation "
+                f"{uncertainty_label} "
                 f"({brief.uncertainty.simulations:,} paths)"
             )
             items.append(
@@ -367,16 +422,24 @@ def evidence_items_for_tools(
                 "Monitoring triggers"
             )
 
+    if "run_v2_what_if_scenario" in used:
+        items.append(
+            "Verified V2 what-if engine (temporary analysis)"
+        )
+
     return tuple(items)
 
 
 def _render_evidence_used(
     tools_used: tuple[str, ...],
     brief: LiquidityDecisionBrief,
+    *,
+    is_temporary_what_if: bool = False,
 ) -> None:
     items = evidence_items_for_tools(
         tools_used,
         brief,
+        is_temporary_what_if=is_temporary_what_if,
     )
 
     if not items:
@@ -398,6 +461,9 @@ def _render_evidence_used(
 
 def render_v2_copilot(
     brief: LiquidityDecisionBrief,
+    *,
+    baseline_scenario: V2DemoScenario | None = None,
+    is_temporary_what_if: bool = False,
 ) -> None:
     """
     Render the V2 RiskPilot AI Decision Copilot.
@@ -536,6 +602,7 @@ def render_v2_copilot(
                 execution = execute_v2_copilot_request(
                     brief,
                     cleaned_question,
+                    baseline_scenario=baseline_scenario,
                 )
 
             if execution.succeeded:
@@ -550,6 +617,17 @@ def render_v2_copilot(
                 st.session_state[
                     "riskpilot_v2_ai_asked_question"
                 ] = cleaned_question
+
+                if execution.what_if_result is not None:
+                    outcome = execution.what_if_result
+                    st.session_state[V2_WHAT_IF_RESULT_KEY] = outcome
+                    st.session_state[V2_WHAT_IF_BASELINE_KEY] = (
+                        outcome.baseline_scenario_id
+                    )
+                    st.session_state["riskpilot_v2_ai_signature"] = (
+                        _copilot_signature(outcome.command_center.brief)
+                    )
+                    st.rerun()
 
             else:
                 # Never leave an older AI answer visible after
@@ -649,4 +727,5 @@ def render_v2_copilot(
         _render_evidence_used(
             tools_used,
             brief,
+            is_temporary_what_if=is_temporary_what_if,
         )

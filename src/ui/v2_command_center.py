@@ -10,12 +10,16 @@ from src.core.command_center import (
     CommandCenterResult,
     build_command_center,
 )
+from src.core.v2_display import format_probability
 from src.demo.v2_scenarios import (
     get_v2_demo_scenario,
     get_v2_demo_scenarios,
 )
 from src.ui.v2_copilot import (
+    V2_WHAT_IF_RESULT_KEY,
     render_v2_copilot,
+    reset_v2_what_if_state,
+    sync_v2_what_if_state,
 )
 
 
@@ -24,7 +28,27 @@ def _money(value: float) -> str:
 
 
 def _pct(value: float) -> str:
-    return f"{value:.1%}"
+    return format_probability(value)
+
+
+def _pre_recovery_risk_label(
+    is_temporary_what_if: bool,
+) -> str:
+    return (
+        "What-if breach risk"
+        if is_temporary_what_if
+        else "Baseline breach risk"
+    )
+
+
+def _monitoring_heading(
+    is_temporary_what_if: bool,
+) -> str:
+    return (
+        "What-if monitoring"
+        if is_temporary_what_if
+        else "Baseline monitoring"
+    )
 
 
 def build_v2_command_center_result(
@@ -754,6 +778,8 @@ def _driver_display_rows(
 def _build_riskpilot_insight(
     result: CommandCenterResult,
     scenario,
+    *,
+    is_temporary_what_if: bool = False,
 ) -> tuple[str, str]:
     """
     Build a management-facing insight using only values already
@@ -776,6 +802,11 @@ def _build_riskpilot_insight(
     )
 
     recovery = result.brief.recovery
+    cash_scope = (
+        "What-if cash"
+        if is_temporary_what_if
+        else "Baseline cash"
+    )
 
     if (
         position.first_reserve_breach_week
@@ -798,7 +829,7 @@ def _build_riskpilot_insight(
             return (
                 "Recovery can restore the liquidity position",
                 (
-                    "Baseline cash falls "
+                    f"{cash_scope} falls "
                     f"{_money(gap)} below reserve in Week "
                     f"{week}. The current recovery plan uses "
                     f"{_money(recovery.external_liquidity)} "
@@ -812,7 +843,7 @@ def _build_riskpilot_insight(
         return (
             "Near-term liquidity action is required",
             (
-                "Baseline cash falls "
+                f"{cash_scope} falls "
                 f"{_money(gap)} below the management "
                 f"reserve in Week {week}. Current simulated "
                 f"breach risk is {_pct(breach_probability)} "
@@ -901,10 +932,13 @@ def _build_riskpilot_insight(
 def _render_riskpilot_insight(
     result: CommandCenterResult,
     scenario,
+    *,
+    is_temporary_what_if: bool = False,
 ) -> None:
     title, body = _build_riskpilot_insight(
         result,
         scenario,
+        is_temporary_what_if=is_temporary_what_if,
     )
 
     st.markdown(
@@ -932,6 +966,8 @@ def _render_riskpilot_insight(
 def _render_overview_tab(
     result: CommandCenterResult,
     scenario,
+    *,
+    is_temporary_what_if: bool = False,
 ) -> None:
     brief = result.brief
     position = brief.position
@@ -941,7 +977,9 @@ def _render_overview_tab(
     c1, c2, c3 = st.columns(3)
 
     c1.metric(
-        "Baseline breach risk",
+        _pre_recovery_risk_label(
+            is_temporary_what_if
+        ),
         _pct(
             result.simulation
             .shortfall_probability
@@ -1167,7 +1205,13 @@ def _render_recovery_tab(
         .additional_upfront_buffer_at_confidence
         > 0.0
     ):
-        st.markdown("#### With uncertainty buffer")
+        st.markdown("#### Additional upfront liquidity requirement")
+
+        st.caption(
+            "The values below apply only if the additional upfront "
+            "buffer is provided; they are not the outcome of the "
+            "current recovery plan alone."
+        )
 
         b1, b2 = st.columns(2)
 
@@ -1206,6 +1250,8 @@ def _render_recovery_tab(
 def _render_actions_monitoring_tab(
     result: CommandCenterResult,
     scenario,
+    *,
+    is_temporary_what_if: bool = False,
 ) -> None:
     brief = result.brief
 
@@ -1245,7 +1291,12 @@ def _render_actions_monitoring_tab(
                 )
 
     with right:
-        st.markdown("### Baseline monitoring")
+        st.markdown(
+            "### "
+            + _monitoring_heading(
+                is_temporary_what_if
+            )
+        )
 
         st.caption(
             "Triggers reflect the current forecast before "
@@ -1280,6 +1331,8 @@ def _render_actions_monitoring_tab(
 def _render_v2_workspace(
     result: CommandCenterResult,
     scenario,
+    *,
+    is_temporary_what_if: bool = False,
 ) -> None:
     (
         overview_tab,
@@ -1299,6 +1352,7 @@ def _render_v2_workspace(
         _render_overview_tab(
             result,
             scenario,
+            is_temporary_what_if=is_temporary_what_if,
         )
 
     with drivers_tab:
@@ -1315,6 +1369,7 @@ def _render_v2_workspace(
         _render_actions_monitoring_tab(
             result,
             scenario,
+            is_temporary_what_if=is_temporary_what_if,
         )
 
 
@@ -1352,13 +1407,32 @@ def render_v2_command_center() -> None:
         selected_name
     ]
 
-    scenario = get_v2_demo_scenario(
+    baseline_scenario = get_v2_demo_scenario(
         scenario_id
     )
 
-    result = build_v2_command_center_result(
+    sync_v2_what_if_state(
+        st.session_state,
+        scenario_id,
+    )
+
+    baseline_result = build_v2_command_center_result(
         scenario_id
     )
+
+    what_if = st.session_state.get(
+        V2_WHAT_IF_RESULT_KEY
+    )
+    if (
+        what_if is not None
+        and what_if.baseline_scenario_id == scenario_id
+    ):
+        scenario = what_if.scenario
+        result = what_if.command_center
+    else:
+        what_if = None
+        scenario = baseline_scenario
+        result = baseline_result
 
     brief = result.brief
     position = brief.position
@@ -1391,6 +1465,28 @@ def render_v2_command_center() -> None:
             """,
             unsafe_allow_html=True,
         )
+
+    if what_if is not None:
+        status_col, reset_col = st.columns(
+            [5, 1],
+            vertical_alignment="center",
+        )
+        with status_col:
+            st.info(
+                "AI WHAT-IF · Temporary analysis · Baseline unchanged\n\n"
+                + " · ".join(what_if.applied_changes)
+            )
+        with reset_col:
+            if st.button(
+                "Reset to baseline",
+                use_container_width=True,
+                key="riskpilot_v2_what_if_reset",
+            ):
+                reset_v2_what_if_state(
+                    st.session_state,
+                    scenario_id,
+                )
+                st.rerun()
 
     status_label, status_tone = (
         _status_for_result(
@@ -1633,10 +1729,13 @@ def render_v2_command_center() -> None:
     _render_riskpilot_insight(
         result,
         scenario,
+        is_temporary_what_if=(what_if is not None),
     )
 
     render_v2_copilot(
-        result.brief
+        result.brief,
+        baseline_scenario=baseline_scenario,
+        is_temporary_what_if=(what_if is not None),
     )
 
     st.markdown(
@@ -1649,6 +1748,7 @@ def render_v2_command_center() -> None:
     _render_v2_workspace(
         result,
         scenario,
+        is_temporary_what_if=(what_if is not None),
     )
 
     st.caption(

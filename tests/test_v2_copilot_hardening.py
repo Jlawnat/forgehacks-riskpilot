@@ -4,7 +4,7 @@ from src.ai.v2_copilot import (
 )
 
 
-def test_copilot_cannot_access_calculation_engines():
+def test_copilot_exposes_only_scoped_v2_evidence_and_what_if_tools():
     agent = build_v2_copilot()
 
     tool_names = {
@@ -17,6 +17,7 @@ def test_copilot_cannot_access_calculation_engines():
         "get_v2_cash_evidence",
         "get_v2_recovery_evidence",
         "get_v2_actions_monitoring",
+        "run_v2_what_if_scenario",
     }
 
     forbidden = {

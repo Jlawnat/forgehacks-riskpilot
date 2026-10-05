@@ -34,6 +34,7 @@ def test_v2_copilot_agent_exposes_only_scoped_v2_tools():
         "get_v2_cash_evidence",
         "get_v2_recovery_evidence",
         "get_v2_actions_monitoring",
+        "run_v2_what_if_scenario",
     }
 
     assert (
