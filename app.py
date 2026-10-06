@@ -56,6 +56,82 @@ st.set_page_config(
 )
 
 
+def _inject_product_shell_styles() -> None:
+    st.markdown(
+        """
+        <style>
+        /* RiskPilot final product shell */
+
+        #MainMenu {
+            visibility: hidden !important;
+        }
+
+        footer {
+            visibility: hidden !important;
+        }
+
+        [data-testid="stToolbar"] {
+            display: none !important;
+        }
+
+        [data-testid="stDecoration"] {
+            display: none !important;
+        }
+
+        [data-testid="stStatusWidget"] {
+            display: none !important;
+        }
+
+        header[data-testid="stHeader"] {
+            height: 0 !important;
+            min-height: 0 !important;
+            background: transparent !important;
+        }
+
+        .block-container {
+            max-width: 1520px;
+            padding-top: 1.25rem;
+            padding-bottom: 2.5rem;
+        }
+
+        .stButton > button {
+            border-radius: 10px;
+            font-weight: 600;
+            transition:
+                border-color 120ms ease,
+                background 120ms ease,
+                box-shadow 120ms ease;
+        }
+
+        .stButton > button[kind="primary"] {
+            box-shadow:
+                0 1px 2px rgba(15, 23, 42, 0.06),
+                0 4px 12px rgba(37, 99, 235, 0.10);
+        }
+
+        div[data-baseweb="input"] > div,
+        div[data-baseweb="textarea"],
+        div[data-baseweb="select"] > div {
+            border-radius: 10px !important;
+        }
+
+        .modebar {
+            opacity: 0 !important;
+            transition: opacity 120ms ease;
+        }
+
+        .js-plotly-plot:hover .modebar {
+            opacity: 0.35 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+_inject_product_shell_styles()
+
+
 # ---------------------------------------------------------------------
 # STYLE
 # ---------------------------------------------------------------------
@@ -345,7 +421,7 @@ def get_forecast_context(
 # DATA INPUT
 # ---------------------------------------------------------------------
 
-st.sidebar.header("Legacy analysis inputs")
+st.sidebar.header("Monthly analysis inputs")
 
 st.sidebar.caption(
     "These inputs power the legacy monthly Forecast, "
@@ -418,7 +494,7 @@ risks = assess_business_risk(metrics)
 # ---------------------------------------------------------------------
 
 st.sidebar.divider()
-st.sidebar.subheader("Legacy risk appetite")
+st.sidebar.subheader("Monthly risk policy")
 
 default_reserve = min(
     20000.0,
@@ -530,8 +606,7 @@ if product_area == "Advanced Analytics":
             "Forecast Intelligence",
             "Liquidity Risk",
             "Stress Lab",
-            "Legacy Monthly Overview",
-            "Legacy AI Analyst",
+            "Monthly Analysis",
         ],
         default="Forecast Intelligence",
         label_visibility="collapsed",
@@ -544,7 +619,7 @@ if product_area == "Command Center":
 elif product_area == "Methodology & Evidence":
     page = "Model & Data"
 
-elif advanced_area == "Legacy Monthly Overview":
+elif advanced_area == "Monthly Analysis":
     page = "Command Center"
 
 elif advanced_area == "Legacy AI Analyst":
@@ -614,7 +689,7 @@ if page == "Command Center":
             product_area
             == "Advanced Analytics"
             and advanced_area
-            == "Legacy Monthly Overview"
+            == "Monthly Analysis"
         )
         else "V2 13-Week Liquidity"
     )

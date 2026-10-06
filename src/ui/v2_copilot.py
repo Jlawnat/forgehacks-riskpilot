@@ -439,25 +439,33 @@ def _render_evidence_used(
     items = evidence_items_for_tools(
         tools_used,
         brief,
-        is_temporary_what_if=is_temporary_what_if,
     )
 
     if not items:
         return
 
-    st.markdown(
-        "#### Evidence used"
+    evidence_label = (
+        "Verified evidence · Temporary what-if"
+        if is_temporary_what_if
+        else "Verified evidence"
     )
 
-    st.caption(
-        "Verified provenance from RiskPilot's agent runtime. "
-        "This does not expose model reasoning."
-    )
-
-    for item in items:
-        st.markdown(
-            f"✓ **{item}**"
+    with st.expander(
+        evidence_label,
+        expanded=False,
+    ):
+        st.caption(
+            "Verified provenance from RiskPilot's agent runtime. "
+            "This shows the financial evidence used by the answer, "
+            "not private model reasoning."
         )
+
+        for item in items:
+            st.markdown(
+                f"✓ **{item}**"
+            )
+
+
 
 def render_v2_copilot(
     brief: LiquidityDecisionBrief,
@@ -484,7 +492,22 @@ def render_v2_copilot(
     )
 
     st.markdown(
-        "## RiskPilot AI ✦"
+        """
+        <div class="rp-ai-heading">
+            <div class="rp-ai-title">
+                RiskPilot AI
+                <span class="rp-ai-verified">
+                    VERIFIED DECISION SUPPORT
+                </span>
+            </div>
+            <div class="rp-ai-subtitle">
+                Ask about liquidity, risk, recovery or a temporary
+                what-if. Financial engines calculate; AI interprets
+                verified evidence.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     st.markdown(
@@ -535,18 +558,17 @@ def render_v2_copilot(
                 ] = question
                 st.rerun()
 
-    question = st.text_area(
+    question = st.text_input(
         "Ask RiskPilot",
         key="riskpilot_v2_ai_question",
-        height=105,
         placeholder=(
             "Ask about liquidity risk, cash drivers, recovery, "
             "evidence or what management should do next..."
         ),
     )
 
-    ask_col, clear_col, _ = st.columns(
-        [1, 1, 4]
+    ask_col, _ = st.columns(
+        [1, 5]
     )
 
     with ask_col:
@@ -554,35 +576,7 @@ def render_v2_copilot(
             "Ask RiskPilot",
             type="primary",
             use_container_width=True,
-            key="riskpilot_v2_ai_ask",
         )
-
-    with clear_col:
-        clear_clicked = st.button(
-            "Clear",
-            use_container_width=True,
-            key="riskpilot_v2_ai_clear",
-        )
-
-    if clear_clicked:
-        st.session_state[
-            "riskpilot_v2_ai_question"
-        ] = ""
-
-        st.session_state.pop(
-            "riskpilot_v2_ai_answer",
-            None,
-        )
-        st.session_state.pop(
-            "riskpilot_v2_ai_tools",
-            None,
-        )
-        st.session_state.pop(
-            "riskpilot_v2_ai_asked_question",
-            None,
-        )
-
-        st.rerun()
 
     if ask_clicked:
         cleaned_question = (

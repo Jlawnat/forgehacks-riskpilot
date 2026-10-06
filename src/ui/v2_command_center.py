@@ -372,6 +372,76 @@ def _inject_v2_styles() -> None:
             margin-top: 0.55rem;
         }
 
+
+        /* RiskPilot final V2 polish */
+
+        .rp-decision {
+            padding: 0.75rem 0.95rem;
+            margin: 0.65rem 0 0.9rem 0;
+        }
+
+        .rp-decision-title {
+            margin-bottom: 0.15rem;
+        }
+
+        .rp-insight-next {
+            margin-top: 0.85rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid #dbeafe;
+        }
+
+        .rp-insight-next-label {
+            color: #64748b;
+            font-size: 0.70rem;
+            font-weight: 800;
+            letter-spacing: 0.065em;
+            text-transform: uppercase;
+            margin-bottom: 0.2rem;
+        }
+
+        .rp-insight-next-text {
+            color: #0f172a;
+            font-size: 0.94rem;
+            line-height: 1.45;
+            font-weight: 600;
+        }
+
+        .rp-ai-heading {
+            margin-top: 0.2rem;
+            margin-bottom: 0.6rem;
+        }
+
+        .rp-ai-title {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            color: #0f172a;
+            font-size: 1.55rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+
+        .rp-ai-verified {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.22rem 0.48rem;
+            border: 1px solid #bfdbfe;
+            border-radius: 999px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 0.61rem;
+            font-weight: 800;
+            letter-spacing: 0.055em;
+        }
+
+        .rp-ai-subtitle {
+            max-width: 900px;
+            margin-top: 0.32rem;
+            color: #64748b;
+            font-size: 0.89rem;
+            line-height: 1.45;
+        }
+
         </style>
         """,
         unsafe_allow_html=True,
@@ -507,33 +577,77 @@ def _build_liquidity_figure(
                 candidate_recovery_cash
             )
 
-    all_values = (
+    plotted_values = (
         deterministic_cash
         + p10
         + p90
-        + [reserve]
     )
 
     if recovery_cash is not None:
-        all_values += recovery_cash
+        plotted_values += recovery_cash
 
-    lower_bound = min(
-        0.0,
-        min(all_values),
+    data_min = min(
+        plotted_values
+    )
+    data_max = max(
+        plotted_values
     )
 
-    upper_bound = max(all_values)
+    upper_data = max(
+        data_max,
+        reserve,
+    )
 
-    padding = max(
-        5000.0,
-        (upper_bound - lower_bound) * 0.08,
+    # Healthy scenarios should not waste most of the chart on
+    # empty space below the reserve, but the reserve must remain
+    # visible and financially comparable.
+    if data_min >= reserve:
+        reserve_span = max(
+            upper_data - reserve,
+            1.0,
+        )
+
+        lower_bound = max(
+            0.0,
+            reserve
+            - max(
+                5000.0,
+                reserve_span * 0.12,
+            ),
+        )
+
+    else:
+        downside_span = max(
+            upper_data - data_min,
+            1.0,
+        )
+
+        lower_bound = (
+            data_min
+            - max(
+                5000.0,
+                downside_span * 0.08,
+            )
+        )
+
+    chart_span = max(
+        upper_data - lower_bound,
+        1.0,
+    )
+
+    upper_bound = (
+        upper_data
+        + max(
+            5000.0,
+            chart_span * 0.06,
+        )
     )
 
     fig = go.Figure()
 
     # Risk zone below management reserve.
     fig.add_hrect(
-        y0=lower_bound - padding,
+        y0=lower_bound,
         y1=reserve,
         fillcolor="rgba(239, 68, 68, 0.045)",
         line_width=0,
@@ -702,8 +816,8 @@ def _build_liquidity_figure(
                 color="#64748b",
             ),
             range=[
-                lower_bound - padding,
-                upper_bound + padding,
+                lower_bound,
+                upper_bound,
             ],
         ),
     )
@@ -929,6 +1043,73 @@ def _build_riskpilot_insight(
     )
 
 
+
+def _build_recommended_next_step(
+    result: CommandCenterResult,
+    scenario,
+) -> str:
+    """
+    Return a management next step using only verified engine outputs.
+    """
+    position = result.brief.position
+    recovery = result.brief.recovery
+
+    breach_week = (
+        position.first_reserve_breach_week
+    )
+
+    breach_probability = float(
+        result.simulation.shortfall_probability
+    )
+
+    risk_appetite = float(
+        scenario.max_reserve_breach_probability
+    )
+
+    if breach_week is not None:
+        if (
+            recovery is not None
+            and float(
+                recovery.external_liquidity
+            ) > 0.0
+        ):
+            return (
+                "Secure the planned "
+                f"{_money(float(recovery.external_liquidity))} "
+                "of external liquidity before "
+                f"Week {breach_week}."
+            )
+
+        return (
+            "Review the recovery plan before "
+            f"Week {breach_week}."
+        )
+
+    if breach_probability > risk_appetite:
+        liquidity_buffer = float(
+            result.simulation
+            .liquidity_buffer_at_confidence
+        )
+
+        if liquidity_buffer > 0.0:
+            return (
+                "Hold an additional "
+                f"{_money(liquidity_buffer)} "
+                "liquidity buffer and review the "
+                "uncertainty evidence."
+            )
+
+        return (
+            "Review forecast uncertainty and evidence "
+            "before relying on the base forecast."
+        )
+
+    return (
+        "Continue monitoring; no recovery intervention "
+        "is currently required."
+    )
+
+
 def _render_riskpilot_insight(
     result: CommandCenterResult,
     scenario,
@@ -938,29 +1119,52 @@ def _render_riskpilot_insight(
     title, body = _build_riskpilot_insight(
         result,
         scenario,
-        is_temporary_what_if=is_temporary_what_if,
+    )
+
+    next_step = (
+        _build_recommended_next_step(
+            result,
+            scenario,
+        )
+    )
+
+    insight_label = (
+        "RiskPilot Insight · Temporary what-if"
+        if is_temporary_what_if
+        else "RiskPilot Insight"
+    )
+
+    insight_html = (
+        f'<div class="rp-insight">'
+        f'<div class="rp-insight-eyebrow">'
+        f'{insight_label}'
+        f'</div>'
+        f'<div class="rp-insight-title">'
+        f'{title}'
+        f'</div>'
+        f'<div class="rp-insight-body">'
+        f'{body}'
+        f'</div>'
+        f'<div class="rp-insight-next">'
+        f'<div class="rp-insight-next-label">'
+        f'Recommended next step'
+        f'</div>'
+        f'<div class="rp-insight-next-text">'
+        f'{next_step}'
+        f'</div>'
+        f'</div>'
+        f'<div class="rp-insight-source">'
+        f'Grounded in the V2 forecast, uncertainty, '
+        f'recovery and evidence engines.'
+        f'</div>'
+        f'</div>'
     )
 
     st.markdown(
-        f"""
-        <div class="rp-insight">
-            <div class="rp-insight-eyebrow">
-                RiskPilot Insight
-            </div>
-            <div class="rp-insight-title">
-                {title}
-            </div>
-            <div class="rp-insight-body">
-                {body}
-            </div>
-            <div class="rp-insight-source">
-                Grounded in the V2 forecast, uncertainty,
-                recovery and evidence engines.
-            </div>
-        </div>
-        """,
+        insight_html,
         unsafe_allow_html=True,
     )
+
 
 
 def _render_overview_tab(
