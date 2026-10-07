@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 import plotly.graph_objects as go
+import textwrap
+
 import streamlit as st
 
 from src.analytics.metrics import calculate_business_metrics
@@ -13,7 +15,10 @@ from src.core.risk_policy import (
     reserve_headroom,
 )
 from src.forecasting.forecast import forecast_metric
-from src.forecasting.validation import evaluate_models
+from src.forecasting.validation import (
+    evaluate_candidate_models,
+    evaluate_models,
+)
 from src.ingestion.loader import (
     load_business_csv,
     normalize_business_dataframe,
@@ -421,11 +426,11 @@ def get_forecast_context(
 # DATA INPUT
 # ---------------------------------------------------------------------
 
-st.sidebar.header("Monthly analysis inputs")
+st.sidebar.header("Monthly analytics inputs")
 
 st.sidebar.caption(
-    "These inputs power the legacy monthly Forecast, "
-    "Liquidity Risk, Stress Lab and Legacy Overview. "
+    "These inputs power the separate monthly Forecast, "
+    "Liquidity Risk, Stress Lab and Monthly Analysis. "
     "The V2 13-week Command Center uses its own "
     "scenario evidence and policy settings."
 )
@@ -647,9 +652,9 @@ if product_area in {
     )
 
     legacy_context_label = (
-        "Legacy monthly analytics"
+        "Monthly Analytics Layer"
         if product_area == "Advanced Analytics"
-        else "Legacy monthly methodology & evidence"
+        else "Monthly Model & Evidence Layer"
     )
 
     st.markdown(
@@ -670,7 +675,7 @@ if product_area in {
             </span>
             <span class="riskpilot-context-dot">·</span>
             <span>
-                Inputs available from the sidebar
+                Separate monthly layer · own reserve and risk policy
             </span>
         </div>
         """,
@@ -684,7 +689,7 @@ if product_area in {
 
 if page == "Command Center":
     command_center_mode = (
-        "Legacy Overview"
+        "Monthly Analysis"
         if (
             product_area
             == "Advanced Analytics"
@@ -1024,12 +1029,12 @@ if page == "Forecast Intelligence":
         f1, f2, f3, f4 = st.columns(4)
 
         f1.metric(
-            "Champion model",
+            "Production model",
             revenue_forecast.selected_model.upper(),
         )
 
         f2.metric(
-            "Validation MAE",
+            "Production MAE",
             money(revenue_forecast.validation_mae),
         )
 
@@ -1045,47 +1050,156 @@ if page == "Forecast Intelligence":
             percent(metrics.revenue_growth),
         )
 
-        st.markdown("### Model validation leaderboard")
-
-        naive_mae = next(
-            (
-                item.mae
-                for item in revenue_scores
-                if item.name == "naive"
-            ),
-            None,
+        st.markdown(
+            "### Forecast model governance"
         )
 
-        leaderboard_rows = []
+        st.caption(
+            "Five transparent forecasting structures are evaluated "
+            "under rolling-origin out-of-sample validation. The "
+            "production model remains frozen at this checkpoint; "
+            "shadow challengers require stability and regression "
+            "review before promotion."
+        )
 
-        for score in revenue_scores:
-            improvement = None
+        governance_cols = st.columns(4)
 
-            if naive_mae and naive_mae > 0:
-                improvement = (
-                    naive_mae - score.mae
-                ) / naive_mae
+        governance_cols[0].metric(
+            "Validation method",
+            "Rolling-origin",
+        )
 
-            leaderboard_rows.append(
-                {
-                    "Model": score.name.upper(),
-                    "Rolling MAE": score.mae,
-                    "Improvement vs naive":
-                        (
-                            improvement * 100
-                            if improvement is not None
-                            else None
-                        ),
-                    "Selected":
-                        "YES"
-                        if score.name
-                        == revenue_forecast.selected_model
-                        else "",
-                }
+        governance_cols[1].metric(
+            "Candidate pool",
+            "5 models",
+        )
+
+        governance_cols[2].metric(
+            "Production policy",
+            "Frozen",
+        )
+
+        governance_cols[3].metric(
+            "Promotion gate",
+            "Stability review",
+        )
+
+        model_roles = {
+            "naive": "Persistence benchmark",
+            "drift": "Trend benchmark",
+            "ses": "Level smoothing",
+            "holt": "Linear trend",
+            "damped_holt": "Damped trend",
+        }
+
+        production_models = {
+            "holt",
+            "naive",
+        }
+
+        def _governance_rows(
+            scores,
+            selected_model,
+        ):
+            naive_mae = next(
+                (
+                    item.mae
+                    for item in scores
+                    if item.name == "naive"
+                ),
+                None,
             )
 
+            rows = []
+
+            best_candidate_name = min(
+                scores,
+                key=lambda item: item.mae,
+            ).name
+
+            for score in scores:
+                improvement = None
+
+                if (
+                    naive_mae is not None
+                    and naive_mae > 0
+                ):
+                    improvement = (
+                        naive_mae
+                        - score.mae
+                    ) / naive_mae
+
+                if (
+                    score.name
+                    == selected_model
+                ):
+                    status = "PRODUCTION"
+                elif (
+                    score.name
+                    == best_candidate_name
+                ):
+                    status = "SHADOW LEADER"
+                elif (
+                    score.name
+                    in production_models
+                ):
+                    status = "APPROVED ALTERNATIVE"
+                else:
+                    status = "SHADOW"
+
+                rows.append(
+                    {
+                        "Model":
+                            score.name
+                            .replace(
+                                "_",
+                                " ",
+                            )
+                            .title(),
+                        "Role":
+                            model_roles.get(
+                                score.name,
+                                "Candidate",
+                            ),
+                        "Rolling MAE":
+                            score.mae,
+                        "Improvement vs Naive":
+                            (
+                                improvement * 100
+                                if improvement
+                                is not None
+                                else None
+                            ),
+                        "Governance status":
+                            status,
+                    }
+                )
+
+            return rows
+
+        revenue_candidate_scores = (
+            evaluate_candidate_models(
+                df["revenue"]
+            )
+        )
+
+        cost_candidate_scores = (
+            evaluate_candidate_models(
+                df["operating_cost"]
+            )
+        )
+
+        st.markdown(
+            "#### Revenue validation"
+        )
+
         st.dataframe(
-            pd.DataFrame(leaderboard_rows),
+            pd.DataFrame(
+                _governance_rows(
+                    revenue_candidate_scores,
+                    revenue_forecast.selected_model,
+                )
+            ),
             hide_index=True,
             use_container_width=True,
             column_config={
@@ -1093,11 +1207,44 @@ if page == "Forecast Intelligence":
                     st.column_config.NumberColumn(
                         format="$%.0f"
                     ),
-                "Improvement vs naive":
+                "Improvement vs Naive":
                     st.column_config.NumberColumn(
                         format="%.1f%%"
                     ),
             },
+        )
+
+        st.markdown(
+            "#### Operating-cost validation"
+        )
+
+        st.dataframe(
+            pd.DataFrame(
+                _governance_rows(
+                    cost_candidate_scores,
+                    cost_forecast.selected_model,
+                )
+            ),
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "Rolling MAE":
+                    st.column_config.NumberColumn(
+                        format="$%.0f"
+                    ),
+                "Improvement vs Naive":
+                    st.column_config.NumberColumn(
+                        format="%.1f%%"
+                    ),
+            },
+        )
+
+        st.info(
+            "Model promotion is deliberately conservative. A shadow "
+            "challenger may achieve lower MAE than the current "
+            "production model, but lower error alone is not sufficient "
+            "for promotion. RiskPilot also requires fit stability, "
+            "regression testing and downstream financial consistency."
         )
 
         st.markdown("### Actual + forecast")
@@ -2549,47 +2696,314 @@ if page == "Model & Data":
         use_container_width=True,
     )
 
-    st.markdown("### RiskPilot analytical pipeline")
+    st.html(
+        textwrap.dedent(
+            """
+        <style>
+        .rp-arch {
+            margin-top: 0.4rem;
+            margin-bottom: 2rem;
+            padding: 1.35rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 8px 26px rgba(15, 23, 42, 0.04);
+        }
 
-    st.code(
-        """
-Business CSV
-    ↓
-Schema normalization + validation
-    ↓
-Deterministic financial health metrics
-    ↓
-Rolling forecast model validation
-    ↓
-Champion revenue + cost forecasts
-with uncertainty intervals
-    ↓
-Management risk appetite
-liquidity reserve + breach tolerance
-    ↓
-Paired-residual Monte Carlo
-liquidity simulation
-    ↓
-Forward stress testing
-+ liquidity-driver decomposition
-    ↓
-Reverse stress testing
-+ survival boundary
-    ↓
-Recovery decision optimisation
-across operating + funding levers
-    ↓
-Probabilistic recovery validation
-against management risk appetite
-    ↓
-AI Risk Analyst  ← next layer
-        """.strip(),
-        language="text",
-    )
+        .rp-arch-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+        }
 
-    st.caption(
-        "Forecasting, simulation, stress testing and recovery "
-        "calculations are performed by verified Python engines. "
-        "The AI Risk Analyst will use these structured outputs "
-        "as evidence rather than generating financial values itself."
+        .rp-arch-kicker {
+            color: #2563eb;
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.09em;
+            margin-bottom: 0.35rem;
+        }
+
+        .rp-arch-title {
+            color: #0f172a;
+            font-size: 1.35rem;
+            font-weight: 750;
+            line-height: 1.25;
+            margin-bottom: 0.35rem;
+        }
+
+        .rp-arch-subtitle {
+            color: #64748b;
+            font-size: 0.9rem;
+            line-height: 1.55;
+            max-width: 850px;
+        }
+
+        .rp-arch-badge {
+            flex: 0 0 auto;
+            border: 1px solid #bfdbfe;
+            border-radius: 999px;
+            padding: 0.42rem 0.72rem;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+        }
+
+        .rp-arch-flow {
+            display: grid;
+            grid-template-columns:
+                minmax(0, 1fr)
+                26px
+                minmax(0, 1fr)
+                26px
+                minmax(0, 1fr)
+                26px
+                minmax(0, 1fr);
+            gap: 0.4rem;
+            align-items: stretch;
+        }
+
+        .rp-arch-stage {
+            border: 1px solid #e2e8f0;
+            border-radius: 13px;
+            padding: 1rem;
+            min-height: 185px;
+            background: #ffffff;
+        }
+
+        .rp-arch-number {
+            color: #bfdbfe;
+            font-size: 1.45rem;
+            font-weight: 800;
+            line-height: 1;
+            margin-bottom: 0.55rem;
+        }
+
+        .rp-arch-label {
+            color: #2563eb;
+            font-size: 0.67rem;
+            font-weight: 800;
+            letter-spacing: 0.07em;
+            margin-bottom: 0.4rem;
+        }
+
+        .rp-arch-name {
+            color: #0f172a;
+            font-size: 0.96rem;
+            font-weight: 700;
+            line-height: 1.35;
+            margin-bottom: 0.75rem;
+        }
+
+        .rp-arch-items {
+            display: flex;
+            flex-direction: column;
+            gap: 0.42rem;
+            color: #64748b;
+            font-size: 0.79rem;
+            line-height: 1.4;
+        }
+
+        .rp-arch-arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            font-size: 1.2rem;
+        }
+
+        .rp-ai-strip {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.9rem;
+            margin-top: 1rem;
+            padding: 1rem 1.1rem;
+            border: 1px solid #bfdbfe;
+            border-radius: 13px;
+            background: #f8fbff;
+        }
+
+        .rp-ai-mark {
+            width: 38px;
+            height: 38px;
+            flex: 0 0 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            background: #2563eb;
+            color: white;
+            font-size: 1rem;
+            font-weight: 800;
+        }
+
+        .rp-ai-label {
+            color: #1d4ed8;
+            font-size: 0.7rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.3rem;
+        }
+
+        .rp-ai-flow {
+            color: #0f172a;
+            font-size: 0.95rem;
+            font-weight: 700;
+            line-height: 1.5;
+            margin-bottom: 0.25rem;
+        }
+
+        .rp-ai-flow b {
+            color: #60a5fa;
+            padding: 0 0.25rem;
+        }
+
+        .rp-ai-note {
+            color: #64748b;
+            font-size: 0.82rem;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 1100px) {
+            .rp-arch-flow {
+                grid-template-columns:
+                    repeat(2, minmax(0, 1fr));
+            }
+
+            .rp-arch-arrow {
+                display: none;
+            }
+        }
+        </style>
+
+        <div class="rp-arch">
+
+            <div class="rp-arch-head">
+                <div>
+                    <div class="rp-arch-kicker">
+                        VERIFIED DECISION ARCHITECTURE
+                    </div>
+
+                    <div class="rp-arch-title">
+                        From financial evidence to management action
+                    </div>
+
+                    <div class="rp-arch-subtitle">
+                        RiskPilot separates quantitative calculation from
+                        AI interpretation so every recommendation remains
+                        grounded in verified financial evidence.
+                    </div>
+                </div>
+
+                <div class="rp-arch-badge">
+                    ENGINE-GROUNDED
+                </div>
+            </div>
+
+            <div class="rp-arch-flow">
+
+                <div class="rp-arch-stage">
+                    <div class="rp-arch-number">01</div>
+                    <div class="rp-arch-label">
+                        DATA FOUNDATION
+                    </div>
+                    <div class="rp-arch-name">
+                        Trusted financial evidence
+                    </div>
+                    <div class="rp-arch-items">
+                        <span>✓ Schema & input validation</span>
+                        <span>✓ Cash evidence classification</span>
+                        <span>✓ Business health metrics</span>
+                    </div>
+                </div>
+
+                <div class="rp-arch-arrow">→</div>
+
+                <div class="rp-arch-stage">
+                    <div class="rp-arch-number">02</div>
+                    <div class="rp-arch-label">
+                        FORECAST & UNCERTAINTY
+                    </div>
+                    <div class="rp-arch-name">
+                        Validated forward view
+                    </div>
+                    <div class="rp-arch-items">
+                        <span>✓ Rolling model validation</span>
+                        <span>✓ Champion forecast</span>
+                        <span>✓ Paired-residual simulation</span>
+                    </div>
+                </div>
+
+                <div class="rp-arch-arrow">→</div>
+
+                <div class="rp-arch-stage">
+                    <div class="rp-arch-number">03</div>
+                    <div class="rp-arch-label">
+                        RISK & RESILIENCE
+                    </div>
+                    <div class="rp-arch-name">
+                        Management risk boundary
+                    </div>
+                    <div class="rp-arch-items">
+                        <span>✓ Liquidity risk appetite</span>
+                        <span>✓ Forward stress testing</span>
+                        <span>✓ Reverse stress & survival boundary</span>
+                    </div>
+                </div>
+
+                <div class="rp-arch-arrow">→</div>
+
+                <div class="rp-arch-stage">
+                    <div class="rp-arch-number">04</div>
+                    <div class="rp-arch-label">
+                        RECOVERY & DECISION
+                    </div>
+                    <div class="rp-arch-name">
+                        Executable management response
+                    </div>
+                    <div class="rp-arch-items">
+                        <span>✓ Recovery optimisation</span>
+                        <span>✓ Probabilistic validation</span>
+                        <span>✓ Actions & monitoring</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="rp-ai-strip">
+
+                <div class="rp-ai-mark">✦</div>
+
+                <div>
+                    <div class="rp-ai-label">
+                        RISKPILOT AI DECISION LAYER
+                    </div>
+
+                    <div class="rp-ai-flow">
+                        Verified engine outputs
+                        <b>→</b>
+                        Liquidity Decision Brief
+                        <b>→</b>
+                        Grounded AI interpretation
+                        <b>→</b>
+                        Management action
+                    </div>
+
+                    <div class="rp-ai-note">
+                        Financial engines calculate.
+                        RiskPilot AI interprets verified evidence,
+                        explains the decision context and recommends
+                        the next management step.
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+            """
+        ),
     )

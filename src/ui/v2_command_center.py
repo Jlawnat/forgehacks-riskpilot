@@ -1487,7 +1487,7 @@ def _render_actions_monitoring_tab(
 
                 st.caption(
                     f"Owner: {action.owner} · "
-                    f"Target: {action.target_date} · "
+                    f"Scenario target: {action.target_date} · "
                     f"Expected impact: "
                     f"{_money(action.expected_cash_impact)} · "
                     f"Status: "

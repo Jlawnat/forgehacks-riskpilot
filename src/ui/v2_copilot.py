@@ -510,15 +510,6 @@ def render_v2_copilot(
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        (
-            "Ask anything about this business's liquidity, risk, "
-            "evidence, recovery plan or next actions. RiskPilot's "
-            "financial engines calculate the numbers; the AI Copilot "
-            "explains the verified evidence and what it means "
-            "for management."
-        )
-    )
 
     st.caption(
         "Grounded only in the current V2 13-week "
