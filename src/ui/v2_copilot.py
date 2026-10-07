@@ -13,6 +13,9 @@ from src.core.liquidity_brief import (
 )
 from src.core.v2_what_if import V2WhatIfResult
 from src.demo.v2_scenarios import V2DemoScenario
+from src.ui.v2_agent_trace import (
+    render_agent_execution_trace,
+)
 
 
 V2_WHAT_IF_RESULT_KEY = "riskpilot_v2_what_if_result"
@@ -501,9 +504,10 @@ def render_v2_copilot(
                 </span>
             </div>
             <div class="rp-ai-subtitle">
-                Ask about liquidity, risk, recovery or a temporary
-                what-if. Financial engines calculate; AI interprets
-                verified evidence.
+                Management question → AI intent interpretation →
+                verified financial tools → grounded recommendation.
+                Financial engines calculate; AI orchestrates and
+                explains.
             </div>
         </div>
         """,
@@ -512,9 +516,73 @@ def render_v2_copilot(
 
 
     st.caption(
-        "Grounded only in the current V2 13-week "
-        "Liquidity Decision Brief."
+        "Agent runtime is grounded only in the current "
+        "V2 13-week Liquidity Decision Brief and verified "
+        "RiskPilot tools."
     )
+
+    if baseline_scenario is not None:
+        st.markdown(
+            """
+            <div style="
+                margin:0.55rem 0 0.45rem 0;
+                padding:0.65rem 0.75rem;
+                border:1px solid #dbeafe;
+                border-radius:10px;
+                background:#f8fbff;
+            ">
+                <div style="
+                    color:#2563eb;
+                    font-size:0.58rem;
+                    font-weight:800;
+                    letter-spacing:0.09em;
+                    text-transform:uppercase;
+                ">
+                    AGENTIC DEMO
+                </div>
+                <div style="
+                    margin-top:0.14rem;
+                    color:#0f172a;
+                    font-size:0.76rem;
+                    font-weight:700;
+                ">
+                    Run a multi-assumption management stress question
+                </div>
+                <div style="
+                    margin-top:0.10rem;
+                    color:#64748b;
+                    font-size:0.65rem;
+                    line-height:1.4;
+                ">
+                    RiskPilot will interpret the request, call the
+                    verified scenario engine and ground its answer
+                    in the resulting evidence.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if st.button(
+            "Run agentic stress question",
+            use_container_width=True,
+            key=(
+                "riskpilot_v2_agentic_"
+                "stress_question"
+            ),
+        ):
+            st.session_state[
+                "riskpilot_v2_ai_question"
+            ] = (
+                "What if modelled revenue falls 20% and "
+                "modelled operating costs rise 10%? "
+                "Run the verified temporary scenario, compare "
+                "the resulting liquidity position with management "
+                "risk appetite, and tell management whether action "
+                "is required. Use only RiskPilot engine evidence."
+            )
+
+            st.rerun()
 
     suggestions = (
         suggested_questions_for_brief(
@@ -581,8 +649,8 @@ def render_v2_copilot(
 
         else:
             with st.spinner(
-                "RiskPilot is reviewing the "
-                "verified liquidity evidence..."
+                "RiskPilot Agent is interpreting the request "
+                "and orchestrating verified financial tools..."
             ):
                 execution = execute_v2_copilot_request(
                     brief,
@@ -693,8 +761,19 @@ def render_v2_copilot(
     )
 
     if answer:
+        has_what_if = (
+            "run_v2_what_if_scenario"
+            in tools_used
+        )
+
+        render_agent_execution_trace(
+            tools_used,
+            brief,
+            has_what_if=has_what_if,
+        )
+
         st.markdown(
-            "### RiskPilot response"
+            "### Management recommendation"
         )
 
         if asked_question:
