@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "source_name": "Australian Bureau of Statistics \u2014 Monthly Business Turnover Indicator",
+  "source_url": "https://www.abs.gov.au/statistics/economy/business-indicators/monthly-business-turnover-indicator/sep-2025",
+  "methodology_url": "https://www.abs.gov.au/methodologies/monthly-business-turnover-indicator-methodology/sep-2025",
+  "release_date": "2025-11-10",
+  "release_period": "September 2025",
+  "publication_status": "Ceased; historical external benchmark",
+  "retrieved_at": "2026-10-07",
+  "purpose": "EXTERNAL MODEL BENCHMARK ONLY; not demo-company revenue",
+  "transformations": "Selected official seasonally adjusted current-price industry index columns by series ID; ISO dates; no imputation, smoothing, rescaling or outlier removal.",
+  "vintage_limitation": "Final revised September 2025 vintage, including concurrent seasonal adjustment; not an as-published real-time backtest.",
+  "csv_sha256": "f412e0ba509f10e9a5643823884e0864272b372c85cf2f34c979499c0763a1cf",
+  "series": [
+    {
+      "series_id": "A124873965J",
+      "industry": "Retail trade",
+      "exact_series_name": "Business Turnover Index ;  Retail trade ;  Current Price ;",
+      "series_type": "Seasonally Adjusted",
+      "units": "Index points; July 2019 = 100",
+      "source_url": "https://www.abs.gov.au/statistics/economy/business-indicators/monthly-business-turnover-indicator/sep-2025/5681007_Retail_trade.xlsx",
+      "raw_file": "raw/retail.xlsx",
+      "raw_sha256": "d203a76aa10ed873f2cfc7787012817d702abc2b2e441ad42f97aba7ca95f503",
+      "observations": 189,
+      "start": "2010-01-01",
+      "end": "2025-09-01"
+    },
+    {
+      "series_id": "A124873821W",
+      "industry": "Accommodation and food services",
+      "exact_series_name": "Business Turnover Index ;  Accommodation and food services ;  Current Price ;",
+      "series_type": "Seasonally Adjusted",
+      "units": "Index points; July 2019 = 100",
+      "source_url": "https://www.abs.gov.au/statistics/economy/business-indicators/monthly-business-turnover-indicator/sep-2025/5681008_Accommodation_food_services.xlsx",
+      "raw_file": "raw/accommodation.xlsx",
+      "raw_sha256": "5df2946b2cd2e9bb237080130c7677292c2f6eec0f849a5edec5f9dc506a4779",
+      "observations": 189,
+      "start": "2010-01-01",
+      "end": "2025-09-01"
+    },
+    {
+      "series_id": "A124873641L",
+      "industry": "Professional, scientific and technical services",
+      "exact_series_name": "Business Turnover Index ;  Professional, scientific and technical services ;  Current Price ;",
+      "series_type": "Seasonally Adjusted",
+      "units": "Index points; July 2019 = 100",
+      "source_url": "https://www.abs.gov.au/statistics/economy/business-indicators/monthly-business-turnover-indicator/sep-2025/5681011_Professional_scientific_technical_services.xlsx",
+      "raw_file": "raw/professional.xlsx",
+      "raw_sha256": "a2082863f1ce57e35be8e5fbdadd976e13ef88202a143e1594a1624311923955",
+      "observations": 189,
+      "start": "2010-01-01",
+      "end": "2025-09-01"
+    }
+  ]
+}

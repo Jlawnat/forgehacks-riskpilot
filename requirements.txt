@@ -54,7 +54,7 @@ python-multipart==0.0.32
 referencing==0.37.0
 requests==2.34.2
 # Editable Git install with no remote (riskpilot==0.1.0)
--e /home/elliot/forgehacks-riskpilot
+-e .
 rpds-py==2026.6.3
 scikit-learn==1.9.1
 scipy==1.18.1
@@ -74,3 +74,6 @@ uvicorn==0.54.0
 watchdog==6.0.0
 websockets==16.1.1
 wrapt==2.5.0
+
+# Offline ABS XLSX import
+openpyxl>=3.1,<4

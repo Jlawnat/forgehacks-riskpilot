@@ -51,6 +51,8 @@ from src.ui.v2_command_center import (
     render_v2_command_center,
 )
 from src.ui.ai_analyst import render_ai_risk_analyst
+from src.ui.external_benchmark import render_external_benchmark
+from src.forecasting.external_benchmark import MODEL_LABELS
 
 
 st.set_page_config(
@@ -379,7 +381,8 @@ def percent(value: float | None) -> str:
     if value is None:
         return "N/A"
 
-    return f"{value * 100:.1f}%"
+    rounded = round(value * 100, 1)
+    return f"{0.0 if rounded == 0 else rounded:.1f}%"
 
 
 def risk_class(level: str) -> str:
@@ -627,7 +630,7 @@ elif product_area == "Methodology & Evidence":
 elif advanced_area == "Monthly Analysis":
     page = "Command Center"
 
-elif advanced_area == "Legacy AI Analyst":
+elif advanced_area == "Monthly AI Analyst":
     page = "AI Risk Analyst"
 
 else:
@@ -734,7 +737,7 @@ if page == "Command Center":
         )
     )
 
-    st.subheader("Executive Risk Command Center")
+    st.subheader("Monthly Business Analysis")
 
     failure_period = (
         first_cash_breach(
@@ -750,7 +753,7 @@ if page == "Command Center":
     )
 
     forecast_failure = (
-        f"Period {failure_period}"
+        f"Month {failure_period}"
         if failure_period is not None
         else "Not within horizon"
     )
@@ -940,7 +943,7 @@ if page == "Command Center":
             observations.append(
                 "Baseline forecast indicates cash may breach "
                 f"the ${risk_policy.minimum_cash_reserve:,.0f} "
-                f"management reserve in period {failure_period}."
+                f"management reserve in forecast month {failure_period}."
             )
 
         for obs in observations:
@@ -1019,6 +1022,9 @@ if page == "Forecast Intelligence":
     )
 
     st.subheader("Forecast Intelligence")
+    render_external_benchmark()
+    st.markdown("### Current Business Forecast")
+    st.caption("Monthly revenue and operating-cost analysis for the selected business · separate from the external ABS benchmark and V2 13-week cash engine")
 
     if revenue_forecast is None:
         st.warning(
@@ -1030,7 +1036,7 @@ if page == "Forecast Intelligence":
 
         f1.metric(
             "Production model",
-            revenue_forecast.selected_model.upper(),
+            MODEL_LABELS.get(revenue_forecast.selected_model, revenue_forecast.selected_model),
         )
 
         f2.metric(
@@ -1039,7 +1045,7 @@ if page == "Forecast Intelligence":
         )
 
         f3.metric(
-            "Forecast revenue +3",
+            "Revenue forecast · month 3",
             money(
                 revenue_forecast.forecasts[-1].value
             ),
@@ -1150,12 +1156,7 @@ if page == "Forecast Intelligence":
                 rows.append(
                     {
                         "Model":
-                            score.name
-                            .replace(
-                                "_",
-                                " ",
-                            )
-                            .title(),
+                            MODEL_LABELS.get(score.name, score.name),
                         "Role":
                             model_roles.get(
                                 score.name,
@@ -1165,7 +1166,7 @@ if page == "Forecast Intelligence":
                             score.mae,
                         "Improvement vs Naive":
                             (
-                                improvement * 100
+                                (0.0 if round(improvement * 100, 1) == 0 else improvement * 100)
                                 if improvement
                                 is not None
                                 else None
@@ -2479,7 +2480,7 @@ if page == "Stress Lab":
             expanded=False,
         ):
             st.caption(
-                "Legacy operating-recovery diagnostics retained "
+                "Monthly operating-recovery diagnostics retained "
                 "for transparency and comparison with the newer "
                 "Recovery Decision Center."
             )

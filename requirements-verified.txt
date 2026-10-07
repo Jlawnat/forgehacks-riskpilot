@@ -1,0 +1,16 @@
+# Direct dependencies used for V2M verification on Python 3.12.
+# Transitive dependencies resolve through package metadata.
+numpy==2.3.5
+pandas==2.2.3
+scipy==1.17.0
+statsmodels==0.15.0
+streamlit==1.65.0
+plotly==7.1.0
+pydantic==2.13.5
+scikit-learn==1.8.0
+python-dotenv==1.2.4
+openai==3.26.0
+openai-agents==0.23.1
+pytest==9.1.1
+openpyxl==3.1.5
+-e .
