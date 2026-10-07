@@ -32,7 +32,7 @@ Official ABS Monthly Business Turnover Indicator final September 2025 release; r
 - Accommodation and food services: A124873821W.
 - Professional, scientific and technical services: A124873641L.
 
-The official XLSX files, exact series names, source URLs, units, retrieval date, transformations and checksums are frozen in `data/external_benchmark/`. All data sources are ABS; no secondary commercial source or FRED/Census fallback was needed. See `REAL_DATA_BENCHMARK.md` for all official links and both horizon tables.
+The official XLSX files, exact series names, source URLs, units, retrieval date, transformations and checksums are frozen in `data/external_benchmark/`. All data sources are ABS; no secondary commercial source or FRED/Census fallback was needed. See [REAL_DATA_BENCHMARK.md](../validation/REAL_DATA_BENCHMARK.md) for all official links and both horizon tables.
 
 Primary three-month results (equal-weight industries; MAE/RMSE in index points):
 
