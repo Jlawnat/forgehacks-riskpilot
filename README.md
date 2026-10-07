@@ -6,7 +6,7 @@
 
 RiskPilot turns financial evidence into a verified **13-week liquidity outlook**, quantifies downside risk, tests recovery actions, and explains the next move with grounded AI.
 
-![RiskPilot: a real stressed-business cash trajectory, from 100% baseline reserve-breach risk to 0.0% plan risk with $10,000 external liquidity](assets/marketing/riskpilot-hero.png)
+![RiskPilot Public SEC 13-week Liquidity Command Center](assets/marketing/riskpilot-hero.png)
 
 **AI interprets. Financial engines calculate.**
 

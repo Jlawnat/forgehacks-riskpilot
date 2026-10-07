@@ -194,7 +194,7 @@ def test_public_sec_case_preserves_disclosed_liquidity_shape():
 
     assert (
         scenario.management_reserve
-        == 25000000.0
+        == 20000000.0
     )
 
 

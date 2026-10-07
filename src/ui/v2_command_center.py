@@ -21,6 +21,9 @@ from src.ui.customer_evidence import (
 from src.ui.customer_recovery import (
     render_customer_recovery_controls,
 )
+from src.ui.management_brief_export import (
+    render_management_brief_export,
+)
 from src.ui.v2_copilot import (
     V2_WHAT_IF_RESULT_KEY,
     render_v2_copilot,
@@ -2684,6 +2687,10 @@ def render_v2_command_center(
         render_customer_evidence_drilldown(
             result
         )
+
+    render_management_brief_export(
+        result
+    )
 
     render_v2_copilot(
         result.brief,

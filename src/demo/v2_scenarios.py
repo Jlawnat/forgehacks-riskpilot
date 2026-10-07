@@ -322,7 +322,7 @@ def _public_sec_restructuring() -> V2DemoScenario:
             "$20m minimum-liquidity reference disclosed in the "
             "related restructuring materials."
         ),
-        management_reserve=25000000.0,
+        management_reserve=20_000_000.0,
         max_reserve_breach_probability=0.10,
         forecast_input=DirectCashForecastInput(
             start_date=_START_DATE,

@@ -978,9 +978,61 @@ product_area = st.segmented_control(
     key="riskpilot_product_area",
 )
 
+# Streamlit widgets can transiently return None during a rerun.
+# Treat any missing/invalid value as the safe default workspace.
+VALID_PRODUCT_AREAS = {
+    "Command Center",
+    "Advanced Analytics",
+    "Methodology & Evidence",
+}
+
+if product_area not in VALID_PRODUCT_AREAS:
+    product_area = "Command Center"
+
+
+# =====================================================================
+# COMMAND CENTER — HARD ROUTE
+# =====================================================================
+# The V2 13-week product is rendered here and execution stops.
+# Legacy monthly routing below can never replace this page.
+
+if product_area == "Command Center":
+
+    data_workspace = st.segmented_control(
+        "RiskPilot data workspace",
+        [
+            "Explore demo",
+            "Use company data",
+        ],
+        default="Explore demo",
+        label_visibility="collapsed",
+        key="riskpilot_data_workspace",
+    )
+
+    if data_workspace == "Use company data":
+        customer_scenario = render_customer_onboarding()
+
+        if customer_scenario is None:
+            st.stop()
+
+        render_v2_command_center(
+            scenario_override=customer_scenario
+        )
+
+    else:
+        render_v2_command_center()
+
+    st.stop()
+
+
+# =====================================================================
+# ADVANCED ANALYTICS
+# =====================================================================
+
 advanced_area = None
 
 if product_area == "Advanced Analytics":
+
     advanced_area = st.segmented_control(
         "Advanced analytics",
         [
@@ -994,23 +1046,52 @@ if product_area == "Advanced Analytics":
         key="riskpilot_advanced_area",
     )
 
-if product_area == "Command Center":
-    page = "Command Center"
+    if advanced_area == "Monthly Analysis":
+        page = "Command Center"
+    else:
+        page = (
+            advanced_area
+            or "Forecast Intelligence"
+        )
+
+
+# =====================================================================
+# METHODOLOGY & EVIDENCE
+# =====================================================================
 
 elif product_area == "Methodology & Evidence":
     page = "Model & Data"
 
-elif advanced_area == "Monthly Analysis":
-    page = "Command Center"
-
-elif advanced_area == "Monthly AI Analyst":
-    page = "AI Risk Analyst"
 
 else:
-    page = (
-        advanced_area
-        or "Forecast Intelligence"
+    # Defensive fallback only. Invalid widget state is normalised
+    # to Command Center above, so this branch should be unreachable.
+    product_area = "Command Center"
+
+    data_workspace = st.segmented_control(
+        "RiskPilot data workspace fallback",
+        [
+            "Explore demo",
+            "Use company data",
+        ],
+        default="Explore demo",
+        label_visibility="collapsed",
+        key="riskpilot_data_workspace_fallback",
     )
+
+    if data_workspace == "Use company data":
+        customer_scenario = render_customer_onboarding()
+
+        if customer_scenario is None:
+            st.stop()
+
+        render_v2_command_center(
+            scenario_override=customer_scenario
+        )
+    else:
+        render_v2_command_center()
+
+    st.stop()
 
 
 # ---------------------------------------------------------------------
