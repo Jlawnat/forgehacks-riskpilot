@@ -1,0 +1,13 @@
+event_id,date,amount,direction,category,source_type,status,description,source_reference
+cenveo-sec-w2,2018-01-06,5629000,OUTFLOW,reported liquidity movement,MODELLED,ACTIVE,SEC-reported liquidity movement from Week 1 to Week 2,Cenveo 2018 SEC Exhibit 99.4
+cenveo-sec-w3,2018-01-13,3727000,OUTFLOW,reported liquidity movement,MODELLED,ACTIVE,SEC-reported liquidity movement from Week 2 to Week 3,Cenveo 2018 SEC Exhibit 99.4
+cenveo-sec-w4,2018-01-20,8078000,OUTFLOW,reported liquidity movement,MODELLED,ACTIVE,SEC-reported liquidity movement from Week 3 to Week 4,Cenveo 2018 SEC Exhibit 99.4
+cenveo-sec-w5,2018-01-27,43914000,INFLOW,reported liquidity movement,MODELLED,ACTIVE,SEC-reported liquidity movement from Week 4 to Week 5,Cenveo 2018 SEC Exhibit 99.4
+cenveo-sec-w6,2018-02-03,3731000,INFLOW,reported liquidity movement,MODELLED,ACTIVE,SEC-reported liquidity movement from Week 5 to Week 6,Cenveo 2018 SEC Exhibit 99.4
+cenveo-sec-w7,2018-02-10,48006000,INFLOW,reported liquidity movement,MODELLED,ACTIVE,SEC-reported liquidity movement from Week 6 to Week 7,Cenveo 2018 SEC Exhibit 99.4
+cenveo-sec-w8,2018-02-17,1541000,INFLOW,reported liquidity movement,MODELLED,ACTIVE,SEC-reported liquidity movement from Week 7 to Week 8,Cenveo 2018 SEC Exhibit 99.4
+cenveo-sec-w9,2018-02-24,14331000,OUTFLOW,reported liquidity movement,MODELLED,ACTIVE,SEC-reported liquidity movement from Week 8 to Week 9,Cenveo 2018 SEC Exhibit 99.4
+cenveo-sec-w10,2018-03-03,4207000,OUTFLOW,reported liquidity movement,MODELLED,ACTIVE,SEC-reported liquidity movement from Week 9 to Week 10,Cenveo 2018 SEC Exhibit 99.4
+cenveo-sec-w11,2018-03-10,4072000,INFLOW,reported liquidity movement,MODELLED,ACTIVE,SEC-reported liquidity movement from Week 10 to Week 11,Cenveo 2018 SEC Exhibit 99.4
+cenveo-sec-w12,2018-03-17,26963000,INFLOW,reported liquidity movement,MODELLED,ACTIVE,SEC-reported liquidity movement from Week 11 to Week 12,Cenveo 2018 SEC Exhibit 99.4
+cenveo-sec-w13,2018-03-24,3702000,INFLOW,reported liquidity movement,MODELLED,ACTIVE,SEC-reported liquidity movement from Week 12 to Week 13,Cenveo 2018 SEC Exhibit 99.4

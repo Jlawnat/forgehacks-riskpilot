@@ -1,0 +1,14 @@
+{
+  "company": "Cenveo, Inc.",
+  "dataset": "13 Week CF - DIP Budget",
+  "source_type": "public_sec_filing",
+  "source_document": "SEC Exhibit 99.4",
+  "source_url": "https://www.sec.gov/Archives/edgar/data/920321/000119312518030024/d515496dex994.htm",
+  "forecast_start": "2017-12-30",
+  "opening_liquidity": 26749000,
+  "management_minimum_cash": 20000000,
+  "currency": "USD",
+  "units": "USD",
+  "classification": "public management forecast",
+  "note": "The CSV contains week-to-week movements derived exactly from the SEC-reported LIQUIDITY row. RiskPilot probability and uncertainty analysis are separate analytical overlays and are not SEC-reported values."
+}

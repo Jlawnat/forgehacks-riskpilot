@@ -205,6 +205,150 @@ def _errors(
     )
 
 
+def _public_liquidity_events(
+    prefix: str,
+    weekly_liquidity: tuple[float, ...],
+) -> tuple[CashEvent, ...]:
+    """
+    Convert a disclosed weekly liquidity path into deterministic
+    weekly liquidity-movement events.
+
+    These events are intentionally classified as MODELLED because
+    the public source is a management forecast / DIP budget, not
+    RiskPilot-verified committed bank evidence.
+
+    This preserves provenance honesty:
+    - source liquidity path: public filing
+    - RiskPilot reserve policy: illustrative
+    - RiskPilot uncertainty overlay: illustrative
+    """
+    if not weekly_liquidity:
+        return ()
+
+    events: list[CashEvent] = []
+
+    previous = weekly_liquidity[0]
+
+    # W1 equals the disclosed starting liquidity used by the
+    # forecast input, so no artificial W1 movement is created.
+    for index, closing_liquidity in enumerate(
+        weekly_liquidity[1:],
+        start=1,
+    ):
+        delta = closing_liquidity - previous
+
+        if delta != 0.0:
+            events.append(
+                CashEvent(
+                    event_id=(
+                        f"{prefix}-w{index + 1}-"
+                        "public-liquidity-movement"
+                    ),
+                    date=(
+                        _START_DATE
+                        + timedelta(days=index * 7 + 3)
+                    ),
+                    amount=abs(delta),
+                    direction=(
+                        "INFLOW"
+                        if delta > 0.0
+                        else "OUTFLOW"
+                    ),
+                    category=(
+                        "public SEC liquidity movement"
+                    ),
+                    source_type="MODELLED",
+                    status="ACTIVE",
+                    source_reference=(
+                        "Cenveo-2018-SEC-Exhibit-99.4"
+                    ),
+                )
+            )
+
+        previous = closing_liquidity
+
+    return tuple(events)
+
+
+def _public_sec_restructuring() -> V2DemoScenario:
+    """
+    Public real-world demonstration case.
+
+    Source:
+    Cenveo, Inc. 2018 publicly filed 13-week DIP budget,
+    SEC Exhibit 99.4, accession 0001193125-18-030024.
+
+    The disclosed LIQUIDITY row is used as the deterministic
+    weekly path, expressed in dollars rather than the filing's
+    $000 presentation.
+
+    IMPORTANT:
+    - The public liquidity path is source data.
+    - The $20m liquidity reference is sourced from the
+      related restructuring materials.
+    - The uncertainty profile is a RiskPilot demo overlay.
+    - RiskPilot's breach probability and uncertainty overlay
+      remain illustrative analysis layers and are not attributed
+      to Cenveo management.
+    """
+
+    liquidity_thousands = (
+        26749.0,
+        21120.0,
+        17393.0,
+        9315.0,
+        53229.0,
+        56960.0,
+        104966.0,
+        106507.0,
+        92176.0,
+        87969.0,
+        92041.0,
+        119004.0,
+        122706.0,
+    )
+
+    liquidity = tuple(
+        value * 1000.0
+        for value in liquidity_thousands
+    )
+
+    return V2DemoScenario(
+        scenario_id="public_sec_cenveo",
+        name="Public SEC Restructuring Case",
+        description=(
+            "Real 13-week public liquidity path from Cenveo's "
+            "2018 SEC-filed DIP budget, evaluated against the "
+            "$20m minimum-liquidity reference disclosed in the "
+            "related restructuring materials."
+        ),
+        management_reserve=25000000.0,
+        max_reserve_breach_probability=0.10,
+        forecast_input=DirectCashForecastInput(
+            start_date=_START_DATE,
+            opening_cash=liquidity[0],
+            events=_public_liquidity_events(
+                "public-sec-cenveo",
+                liquidity,
+            ),
+        ),
+        uncertainty_profile=_errors(
+            (
+                (-0.15, 0.12),
+                (-0.12, 0.10),
+                (-0.10, 0.08),
+                (-0.08, 0.06),
+                (-0.05, 0.05),
+                (-0.02, 0.02),
+                (0.00, 0.00),
+                (0.03, -0.02),
+                (0.06, -0.04),
+                (0.10, -0.06),
+            )
+        ),
+    )
+
+
 def _healthy() -> V2DemoScenario:
     weekly = tuple(
         (
@@ -414,6 +558,7 @@ def get_v2_demo_scenarios(
         _healthy(),
         _stressed_recoverable(),
         _severe_uncertain(),
+        _public_sec_restructuring(),
     )
 
 

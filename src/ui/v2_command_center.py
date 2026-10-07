@@ -15,11 +15,20 @@ from src.demo.v2_scenarios import (
     get_v2_demo_scenario,
     get_v2_demo_scenarios,
 )
+from src.ui.customer_evidence import (
+    render_customer_evidence_drilldown,
+)
+from src.ui.customer_recovery import (
+    render_customer_recovery_controls,
+)
 from src.ui.v2_copilot import (
     V2_WHAT_IF_RESULT_KEY,
     render_v2_copilot,
     reset_v2_what_if_state,
     sync_v2_what_if_state,
+)
+from src.ui.customer_history import (
+    render_customer_forecast_history,
 )
 
 
@@ -442,6 +451,646 @@ def _inject_v2_styles() -> None:
             line-height: 1.45;
         }
 
+
+        /* =====================================================
+           RISKPILOT COMMAND CENTER
+           Brand-aligned CFO workspace
+           ===================================================== */
+
+        /* Context strip */
+        .rp-context-bar {
+            margin-top: 0.35rem;
+
+            border:
+                1px solid
+                #dbe5f2;
+
+            border-radius: 9px;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    #f1f6ff 0%,
+                    #f8fbff 50%,
+                    #ffffff 100%
+                );
+
+            box-shadow:
+                inset 3px 0 0 #2563eb;
+
+            color: #607089;
+        }
+
+        .rp-context-primary {
+            color: #173b82;
+            font-weight: 760;
+        }
+
+        /* Page hierarchy */
+        .rp-shell {
+            margin-top: 0.75rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .rp-eyebrow {
+            color: #2563eb;
+
+            font-size: 0.67rem;
+            font-weight: 820;
+
+            letter-spacing: 0.115em;
+        }
+
+        .rp-title {
+            color: #0b1739;
+
+            font-size: 1.78rem;
+            line-height: 1.12;
+
+            font-weight: 780;
+
+            letter-spacing: -0.035em;
+        }
+
+        .rp-subtitle {
+            max-width: 880px;
+
+            color: #6b7b93;
+
+            font-size: 0.88rem;
+            line-height: 1.45;
+        }
+
+        /* Status */
+        .rp-status {
+            border-radius: 999px;
+
+            padding: 0.42rem 0.7rem;
+
+            font-size: 0.64rem;
+            font-weight: 820;
+
+            letter-spacing: 0.075em;
+        }
+
+        .rp-status-safe {
+            background: #e9f9f2;
+            color: #087451;
+            border: 1px solid #b9ead6;
+        }
+
+        .rp-status-watch {
+            background: #fff8e8;
+            color: #945907;
+            border: 1px solid #efd391;
+        }
+
+        .rp-status-critical {
+            background: #fff0f0;
+            color: #b42318;
+            border: 1px solid #f4c7c5;
+        }
+
+        /* Decision strip */
+        .rp-decision {
+            margin-top: 0.65rem;
+
+            padding: 0.78rem 0.92rem;
+
+            border-radius: 9px;
+
+            box-shadow:
+                0 2px 10px
+                rgba(15, 23, 42, 0.025);
+        }
+
+        .rp-decision-safe {
+            background:
+                linear-gradient(
+                    90deg,
+                    #ecfbf4 0%,
+                    #f6fdf9 100%
+                );
+
+            border-color: #bcebd7;
+        }
+
+        /* Section hierarchy */
+        .rp-section-label {
+            color: #60769a;
+
+            font-size: 0.65rem;
+            font-weight: 820;
+
+            letter-spacing: 0.11em;
+        }
+
+        /* Executive KPIs */
+        .rp-kpi {
+            min-height: 112px;
+
+            padding:
+                0.85rem
+                0.92rem
+                0.78rem;
+
+            border:
+                1px solid
+                #dde6f1;
+
+            border-radius: 10px;
+
+            background:
+                linear-gradient(
+                    160deg,
+                    #ffffff 0%,
+                    #fbfdff 100%
+                );
+
+            box-shadow:
+                0 5px 18px
+                rgba(15, 45, 100, 0.035);
+        }
+
+        .rp-kpi::before {
+            content: "";
+
+            display: block;
+
+            width: 26px;
+            height: 2px;
+
+            margin-bottom: 0.65rem;
+
+            border-radius: 999px;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    #2563eb,
+                    #60a5fa
+                );
+        }
+
+        .rp-kpi-label {
+            color: #6e7f99;
+
+            font-size: 0.64rem;
+            font-weight: 800;
+
+            letter-spacing: 0.065em;
+
+            text-transform: uppercase;
+
+            margin-bottom: 0.38rem;
+        }
+
+        .rp-kpi-value {
+            color: #0b1739;
+
+            font-size: 1.64rem;
+            line-height: 1.08;
+
+            font-weight: 790;
+
+            letter-spacing: -0.035em;
+
+            margin-bottom: 0.38rem;
+        }
+
+        .rp-kpi-note {
+            color: #6e7f99;
+
+            font-size: 0.70rem;
+            line-height: 1.30;
+        }
+
+        /* -----------------------------------------------------
+           Main liquidity canvas
+           ----------------------------------------------------- */
+
+        .rp-panel-heading {
+            margin-top: 0.1rem;
+            margin-bottom: 0.38rem;
+        }
+
+        .rp-panel-title {
+            color: #0b1739;
+
+            font-size: 1.02rem;
+            font-weight: 760;
+
+            letter-spacing: -0.015em;
+        }
+
+        .rp-panel-subtitle {
+            margin-top: 0.16rem;
+
+            color: #8391a7;
+
+            font-size: 0.70rem;
+        }
+
+        div[data-testid="stPlotlyChart"] {
+            overflow: hidden;
+
+            border:
+                1px solid
+                #e0e8f2;
+
+            border-radius: 12px;
+
+            background: #ffffff;
+
+            box-shadow:
+                0 8px 24px
+                rgba(15, 42, 93, 0.04);
+        }
+
+        /* -----------------------------------------------------
+           Signature RiskPilot decision-intelligence panel
+           ----------------------------------------------------- */
+
+        .rp-insight-column-label {
+            margin:
+                0.12rem
+                0
+                0.38rem;
+
+            color: #7084a4;
+
+            font-size: 0.61rem;
+            font-weight: 820;
+
+            letter-spacing: 0.115em;
+        }
+
+        .rp-insight {
+            position: relative;
+            overflow: hidden;
+
+            min-height: 430px;
+
+            display: flex;
+            flex-direction: column;
+
+            margin: 0;
+
+            padding:
+                1.05rem
+                1.05rem
+                1rem
+                1.15rem;
+
+            border:
+                1px solid
+                rgba(96, 165, 250, 0.26);
+
+            border-radius: 12px;
+
+            background:
+                radial-gradient(
+                    circle at 115% -10%,
+                    rgba(59, 130, 246, 0.30),
+                    rgba(59, 130, 246, 0.00) 44%
+                ),
+                linear-gradient(
+                    150deg,
+                    #081a3c 0%,
+                    #0b214b 58%,
+                    #10295a 100%
+                );
+
+            box-shadow:
+                0 12px 30px
+                rgba(15, 42, 93, 0.17);
+        }
+
+        .rp-insight::before {
+            content: "";
+
+            position: absolute;
+
+            left: 0;
+            top: 0;
+
+            width: 4px;
+            height: 100%;
+
+            background:
+                linear-gradient(
+                    180deg,
+                    #60a5fa,
+                    #2563eb
+                );
+        }
+
+        .rp-insight-eyebrow {
+            color: #8dbbff;
+
+            font-size: 0.64rem;
+            font-weight: 820;
+
+            letter-spacing: 0.09em;
+
+            text-transform: uppercase;
+
+            margin-bottom: 0.72rem;
+        }
+
+        .rp-insight-eyebrow::after {
+            content: "  ✓ VERIFIED";
+
+            color: #6ee7b7;
+
+            margin-left: 0.35rem;
+
+            font-size: 0.57rem;
+        }
+
+        .rp-insight-title {
+            color: #ffffff;
+
+            font-size: 1rem;
+            line-height: 1.42;
+
+            font-weight: 760;
+
+            margin-bottom: 0.58rem;
+        }
+
+        .rp-insight-body {
+            color: #b9c9e1;
+
+            font-size: 0.80rem;
+            line-height: 1.58;
+        }
+
+        .rp-insight-next {
+            margin-top: auto;
+
+            padding-top: 0.82rem;
+
+            border-top:
+                1px solid
+                rgba(147, 197, 253, 0.18);
+        }
+
+        .rp-insight-next-label {
+            color: #8dbbff;
+
+            font-size: 0.59rem;
+            font-weight: 820;
+
+            letter-spacing: 0.09em;
+        }
+
+        .rp-insight-next-text {
+            color: #ffffff;
+
+            font-size: 0.82rem;
+            line-height: 1.45;
+
+            font-weight: 630;
+        }
+
+        .rp-insight-source {
+            color: #7287a8;
+
+            font-size: 0.62rem;
+            line-height: 1.4;
+
+            margin-top: 0.65rem;
+        }
+
+        /* Streamlit workspace tabs */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 1.4rem;
+
+            border-bottom:
+                1px solid
+                #e0e8f2;
+        }
+
+        .stTabs [aria-selected="true"] {
+            color: #1d4ed8 !important;
+        }
+
+        .stTabs [data-baseweb="tab-highlight"] {
+            background:
+                #2563eb !important;
+        }
+
+
+        /* =====================================================
+           RiskPilot CFO workspace density pass
+           ===================================================== */
+
+        /* Scenario / policy context */
+        .rp-context-bar {
+            min-height: 2.25rem;
+            margin-top: 0.05rem;
+            padding: 0.48rem 0.68rem;
+            border-radius: 8px;
+            font-size: 0.74rem;
+        }
+
+        /* Make scenario control less raw-Streamlit */
+        div[data-baseweb="select"] > div {
+            min-height: 42px !important;
+            border: 1px solid #dce5f0 !important;
+            border-radius: 8px !important;
+            background: #f8fafc !important;
+            box-shadow: none !important;
+        }
+
+        div[data-baseweb="select"] span {
+            font-size: 0.78rem !important;
+            color: #334155 !important;
+        }
+
+        /* Command-center heading */
+        .rp-shell {
+            margin-top: 0.38rem;
+            margin-bottom: 0.42rem;
+        }
+
+        .rp-eyebrow {
+            margin-bottom: 0.18rem;
+            font-size: 0.60rem;
+        }
+
+        .rp-title {
+            font-size: 1.52rem;
+            line-height: 1.08;
+        }
+
+        .rp-title-row {
+            margin-bottom: 0.12rem;
+        }
+
+        .rp-subtitle {
+            margin-top: 0.22rem;
+            font-size: 0.78rem;
+            line-height: 1.35;
+        }
+
+        .rp-status {
+            padding: 0.32rem 0.58rem;
+            font-size: 0.57rem;
+        }
+
+        /* Decision strip should read like an executive signal,
+           not another giant content block */
+        .rp-decision {
+            margin: 0.38rem 0 0.48rem 0;
+            padding: 0.60rem 0.78rem;
+            border-radius: 8px;
+        }
+
+        .rp-decision-title {
+            font-size: 0.60rem;
+            margin-bottom: 0.10rem;
+        }
+
+        .rp-decision-text {
+            font-size: 0.78rem;
+            line-height: 1.35;
+        }
+
+        /* Section labels */
+        .rp-section-label {
+            margin-top: 0.62rem;
+            margin-bottom: 0.05rem;
+            font-size: 0.59rem;
+        }
+
+        /* KPIs — dense institutional finance style */
+        .rp-kpi {
+            min-height: 91px;
+            padding:
+                0.63rem
+                0.76rem
+                0.60rem;
+        }
+
+        .rp-kpi::before {
+            width: 22px;
+            margin-bottom: 0.42rem;
+        }
+
+        .rp-kpi-label {
+            margin-bottom: 0.24rem;
+            font-size: 0.57rem;
+        }
+
+        .rp-kpi-value {
+            margin-bottom: 0.22rem;
+            font-size: 1.38rem;
+        }
+
+        .rp-kpi-note {
+            font-size: 0.61rem;
+        }
+
+        /* Outlook should arrive immediately after KPIs */
+        .rp-panel-heading {
+            margin-top: 0;
+            margin-bottom: 0.25rem;
+        }
+
+        .rp-panel-title {
+            font-size: 0.91rem;
+        }
+
+        .rp-panel-subtitle {
+            font-size: 0.62rem;
+        }
+
+        .rp-insight-column-label {
+            margin-top: 0;
+            margin-bottom: 0.25rem;
+            font-size: 0.55rem;
+        }
+
+        .rp-insight {
+            min-height: 360px;
+            padding:
+                0.88rem
+                0.92rem
+                0.84rem
+                1rem;
+        }
+
+        .rp-insight-eyebrow {
+            margin-bottom: 0.55rem;
+            font-size: 0.57rem;
+        }
+
+        .rp-insight-title {
+            margin-bottom: 0.42rem;
+            font-size: 0.91rem;
+        }
+
+        .rp-insight-body {
+            font-size: 0.71rem;
+            line-height: 1.52;
+        }
+
+        .rp-insight-next-text {
+            font-size: 0.73rem;
+        }
+
+        .rp-insight-source {
+            font-size: 0.56rem;
+        }
+
+
+        /* =====================================================
+           Public-source real-world case
+           ===================================================== */
+
+        .rp-public-source-banner {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.55rem;
+
+            margin: 0.10rem 0 0.35rem 0;
+            padding: 0.50rem 0.68rem;
+
+            border: 1px solid #d6e3f4;
+            border-radius: 8px;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    #f4f8ff 0%,
+                    #fbfdff 100%
+                );
+
+            color: #53627a;
+
+            font-size: 0.67rem;
+            line-height: 1.35;
+        }
+
+        .rp-public-source-label {
+            display: inline-flex;
+            align-items: center;
+
+            padding: 0.20rem 0.42rem;
+
+            border-radius: 999px;
+
+            background: #e8f1ff;
+            color: #1d4ed8;
+
+            font-size: 0.56rem;
+            font-weight: 820;
+            letter-spacing: 0.085em;
+        }
+
         </style>
         """,
         unsafe_allow_html=True,
@@ -771,7 +1420,7 @@ def _build_liquidity_figure(
     )
 
     fig.update_layout(
-        height=480,
+        height=360,
         margin=dict(
             l=10,
             r=10,
@@ -1577,62 +2226,104 @@ def _render_v2_workspace(
         )
 
 
-def render_v2_command_center() -> None:
+def render_v2_command_center(
+    scenario_override: V2DemoScenario | None = None,
+) -> None:
     _inject_v2_styles()
 
-    scenarios = get_v2_demo_scenarios()
+    if scenario_override is None:
+        scenarios = get_v2_demo_scenarios()
 
-    name_to_id = {
-        scenario.name: scenario.scenario_id
-        for scenario in scenarios
-    }
+        name_to_id = {
+            scenario.name: scenario.scenario_id
+            for scenario in scenarios
+        }
 
-    scenario_names = list(
-        name_to_id
-    )
-
-    (
-        context_col,
-        selector_col,
-    ) = st.columns(
-        [4.8, 1.6],
-        vertical_alignment="center",
-    )
-
-    with selector_col:
-        selected_name = st.selectbox(
-            "Change scenario",
-            scenario_names,
-            index=0,
-            key="riskpilot_v2_scenario",
+        scenario_names = list(
+            name_to_id
         )
 
-    scenario_id = name_to_id[
-        selected_name
-    ]
+        (
+            context_col,
+            selector_col,
+        ) = st.columns(
+            [4.8, 1.6],
+            vertical_alignment="center",
+        )
 
-    baseline_scenario = get_v2_demo_scenario(
-        scenario_id
-    )
+        with selector_col:
+            selected_name = st.selectbox(
+                "Change scenario",
+                scenario_names,
+                index=0,
+                key="riskpilot_v2_scenario",
+            )
+
+        scenario_id = name_to_id[
+            selected_name
+        ]
+
+        baseline_scenario = (
+            get_v2_demo_scenario(
+                scenario_id
+            )
+        )
+
+        baseline_result = (
+            build_v2_command_center_result(
+                scenario_id
+            )
+        )
+
+    else:
+        context_col = st.container()
+
+        scenario_override = (
+            render_customer_recovery_controls(
+                scenario_override
+            )
+        )
+
+        scenario_id = (
+            scenario_override.scenario_id
+        )
+
+        baseline_scenario = (
+            scenario_override
+        )
+
+        baseline_result = (
+            build_command_center(
+                baseline_scenario,
+                created_at=datetime.now(
+                    timezone.utc
+                ),
+                simulations=2000,
+                seed=42,
+            )
+        )
 
     sync_v2_what_if_state(
         st.session_state,
         scenario_id,
     )
 
-    baseline_result = build_v2_command_center_result(
-        scenario_id
-    )
-
     what_if = st.session_state.get(
         V2_WHAT_IF_RESULT_KEY
     )
+
     if (
         what_if is not None
-        and what_if.baseline_scenario_id == scenario_id
+        and (
+            what_if.baseline_scenario_id
+            == scenario_id
+        )
     ):
         scenario = what_if.scenario
-        result = what_if.command_center
+        result = (
+            what_if.command_center
+        )
+
     else:
         what_if = None
         scenario = baseline_scenario
@@ -1670,6 +2361,23 @@ def render_v2_command_center() -> None:
             unsafe_allow_html=True,
         )
 
+    if scenario_id == "public_sec_cenveo":
+        st.markdown(
+            (
+                '<div class="rp-public-source-banner">'
+                '<span class="rp-public-source-label">'
+                'PUBLIC SOURCE'
+                '</span>'
+                '<span>'
+                'Cenveo 2018 SEC-filed 13-week DIP liquidity '
+                'forecast · $20m minimum-liquidity reference · '
+                'RiskPilot analysis overlay'
+                '</span>'
+                '</div>'
+            ),
+            unsafe_allow_html=True,
+        )
+
     if what_if is not None:
         status_col, reset_col = st.columns(
             [5, 1],
@@ -1692,6 +2400,11 @@ def render_v2_command_center() -> None:
                 )
                 st.rerun()
 
+    if scenario_override is not None:
+        render_customer_forecast_history(
+            baseline_scenario
+        )
+
     status_label, status_tone = (
         _status_for_result(
             result,
@@ -1707,7 +2420,7 @@ def render_v2_command_center() -> None:
         f"""
         <div class="rp-shell">
             <div class="rp-eyebrow">
-                RiskPilot · Liquidity Intelligence
+                AI LIQUIDITY DECISION INTELLIGENCE
             </div>
             <div class="rp-title-row">
                 <h1 class="rp-title">
@@ -1880,26 +2593,35 @@ def render_v2_command_center() -> None:
             position.evidence_coverage_ratio
         )
 
-        _kpi_card(
-            "Evidence coverage",
-            (
-                _pct(evidence)
-                if evidence is not None
-                else "N/A"
-            ),
-            (
-                "Committed vs modelled "
-                "forecast evidence"
-            ),
-            tone=(
-                "positive"
-                if (
-                    evidence is not None
-                    and evidence >= 0.70
-                )
-                else "warning"
-            ),
-        )
+        if scenario_id == "public_sec_cenveo":
+            _kpi_card(
+                "Evidence basis",
+                "PUBLIC FORECAST",
+                "SEC-filed 13-week liquidity budget",
+                tone="neutral",
+            )
+
+        else:
+            _kpi_card(
+                "Evidence coverage",
+                (
+                    _pct(evidence)
+                    if evidence is not None
+                    else "N/A"
+                ),
+                (
+                    "Committed vs modelled "
+                    "forecast evidence"
+                ),
+                tone=(
+                    "positive"
+                    if (
+                        evidence is not None
+                        and evidence >= 0.70
+                    )
+                    else "warning"
+                ),
+            )
 
     st.markdown(
         '<div class="rp-section-label">'
@@ -1908,33 +2630,60 @@ def render_v2_command_center() -> None:
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        "## 13-week cash trajectory"
+    chart_col, insight_col = st.columns(
+        [2.4, 1],
+        gap="large",
+        vertical_alignment="top",
     )
 
-    st.caption(
-        "The shaded band shows the simulated P10–P90 "
-        "cash range. The red area is below the management "
-        "reserve. A recovery path appears only when a "
-        "recovery plan changes the projected cash path."
-    )
+    with chart_col:
+        st.markdown(
+            (
+                '<div class="rp-panel-heading">'
+                '<div class="rp-panel-title">'
+                '13-week cash trajectory'
+                '</div>'
+                '<div class="rp-panel-subtitle">'
+                'Forecast · uncertainty · management reserve'
+                '</div>'
+                '</div>'
+            ),
+            unsafe_allow_html=True,
+        )
 
-    st.plotly_chart(
-        _build_liquidity_figure(
+        st.plotly_chart(
+            _build_liquidity_figure(
+                result
+            ),
+            use_container_width=True,
+            config={
+                "displaylogo": False,
+                "displayModeBar": False,
+            },
+        )
+
+    with insight_col:
+        st.markdown(
+            (
+                '<div class="rp-insight-column-label">'
+                'DECISION INTELLIGENCE'
+                '</div>'
+            ),
+            unsafe_allow_html=True,
+        )
+
+        _render_riskpilot_insight(
+            result,
+            scenario,
+            is_temporary_what_if=(
+                what_if is not None
+            ),
+        )
+
+    if scenario_override is not None:
+        render_customer_evidence_drilldown(
             result
-        ),
-        use_container_width=True,
-        config={
-            "displaylogo": False,
-            "displayModeBar": False,
-        },
-    )
-
-    _render_riskpilot_insight(
-        result,
-        scenario,
-        is_temporary_what_if=(what_if is not None),
-    )
+        )
 
     render_v2_copilot(
         result.brief,

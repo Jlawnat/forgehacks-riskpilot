@@ -45,10 +45,10 @@ def _simulation(scenario):
     )
 
 
-def test_three_demo_scenarios_exist():
+def test_four_demo_scenarios_exist():
     scenarios = get_v2_demo_scenarios()
 
-    assert len(scenarios) == 3
+    assert len(scenarios) == 4
 
     assert {
         scenario.scenario_id
@@ -57,6 +57,7 @@ def test_three_demo_scenarios_exist():
         "healthy",
         "stressed_recoverable",
         "severe_uncertain",
+        "public_sec_cenveo",
     }
 
 
@@ -153,6 +154,47 @@ def test_severe_uncertainty_reveals_material_risk():
     assert (
         severe.shortfall_probability
         > healthy.shortfall_probability
+    )
+
+
+def test_public_sec_case_preserves_disclosed_liquidity_shape():
+    scenario = get_v2_demo_scenario(
+        "public_sec_cenveo"
+    )
+
+    forecast = build_direct_cash_forecast(
+        scenario.forecast_input
+    )
+
+    closing = tuple(
+        week.closing_cash
+        for week in forecast.weeks
+    )
+
+    assert closing == (
+        26749000.0,
+        21120000.0,
+        17393000.0,
+        9315000.0,
+        53229000.0,
+        56960000.0,
+        104966000.0,
+        106507000.0,
+        92176000.0,
+        87969000.0,
+        92041000.0,
+        119004000.0,
+        122706000.0,
+    )
+
+    assert all(
+        event.source_type == "MODELLED"
+        for event in scenario.forecast_input.events
+    )
+
+    assert (
+        scenario.management_reserve
+        == 25000000.0
     )
 
 

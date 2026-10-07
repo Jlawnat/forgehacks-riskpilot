@@ -50,6 +50,9 @@ from src.ui.liquidity import render_liquidity_risk
 from src.ui.v2_command_center import (
     render_v2_command_center,
 )
+from src.ui.customer_onboarding import (
+    render_customer_onboarding,
+)
 from src.ui.ai_analyst import render_ai_risk_analyst
 from src.ui.external_benchmark import render_external_benchmark
 from src.forecasting.external_benchmark import MODEL_LABELS
@@ -340,6 +343,368 @@ st.markdown(
         color: #cbd5e1;
     }
 
+
+    /* =========================================================
+       RISKPILOT — APPROVED COMMERCIAL BRAND SYSTEM
+       GitHub presentation language -> actual product
+       ========================================================= */
+
+    html,
+    body,
+    .stApp,
+    [data-testid="stAppViewContainer"] {
+        background:
+            radial-gradient(
+                circle at 14% -10%,
+                rgba(49, 107, 255, 0.28) 0%,
+                rgba(49, 107, 255, 0.00) 36%
+            ),
+            radial-gradient(
+                circle at 92% 12%,
+                rgba(28, 67, 160, 0.24) 0%,
+                rgba(28, 67, 160, 0.00) 32%
+            ),
+            linear-gradient(
+                145deg,
+                #071226 0%,
+                #0a1730 48%,
+                #081327 100%
+            ) !important;
+    }
+
+    /* The actual finance product surface */
+    .block-container {
+        max-width: 1510px !important;
+        padding:
+            1.25rem
+            1.65rem
+            3rem
+            1.65rem !important;
+        margin-top: 1.35rem !important;
+        margin-bottom: 2rem !important;
+        border: 1px solid rgba(148, 163, 184, 0.20);
+        border-radius: 20px;
+        background: #ffffff;
+        box-shadow:
+            0 28px 80px rgba(0, 0, 0, 0.24),
+            0 2px 8px rgba(15, 23, 42, 0.18);
+    }
+
+    /* ---------------------------------------------------------
+       Brand masthead
+       --------------------------------------------------------- */
+
+    .rp-brand-shell {
+        position: relative;
+        overflow: hidden;
+
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        gap: 2rem;
+
+        margin-bottom: 0.85rem;
+        padding: 1.25rem 1.4rem;
+
+        border:
+            1px solid
+            rgba(96, 165, 250, 0.24);
+
+        border-radius: 15px;
+
+        background:
+            radial-gradient(
+                circle at 12% 0%,
+                rgba(59, 130, 246, 0.28) 0%,
+                rgba(59, 130, 246, 0.00) 42%
+            ),
+            linear-gradient(
+                125deg,
+                #071a3d 0%,
+                #0b2250 48%,
+                #102b61 100%
+            );
+
+        box-shadow:
+            0 12px 34px rgba(15, 42, 93, 0.22);
+    }
+
+    .rp-brand-shell::after {
+        content: "";
+        position: absolute;
+        width: 280px;
+        height: 280px;
+        right: -110px;
+        top: -180px;
+        border-radius: 999px;
+        border: 1px solid rgba(147, 197, 253, 0.16);
+    }
+
+    .rp-brand-left {
+        position: relative;
+        z-index: 2;
+    }
+
+    .rp-brand-lockup {
+        display: flex;
+        align-items: center;
+        gap: 0.78rem;
+    }
+
+    .rp-brand-mark {
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        border:
+            1px solid
+            rgba(191, 219, 254, 0.34);
+
+        border-radius: 11px;
+
+        background:
+            linear-gradient(
+                145deg,
+                #3b82f6 0%,
+                #2563eb 55%,
+                #1d4ed8 100%
+            );
+
+        color: #ffffff;
+        font-size: 1.1rem;
+        font-weight: 900;
+
+        box-shadow:
+            0 8px 20px rgba(37, 99, 235, 0.30);
+    }
+
+    .rp-brand-name {
+        color: #ffffff;
+        font-size: 1.18rem;
+        line-height: 1.05;
+        font-weight: 820;
+        letter-spacing: -0.025em;
+    }
+
+    .rp-brand-category {
+        margin-top: 0.22rem;
+
+        color: #9fc4ff;
+
+        font-size: 0.67rem;
+        line-height: 1.2;
+
+        font-weight: 780;
+        letter-spacing: 0.095em;
+
+        text-transform: uppercase;
+    }
+
+    .rp-brand-promise {
+        margin-top: 0.75rem;
+
+        color: #dbeafe;
+
+        font-size: 0.91rem;
+        line-height: 1.35;
+        font-weight: 590;
+    }
+
+    .rp-brand-promise span {
+        color: #ffffff;
+        font-weight: 760;
+    }
+
+    .rp-brand-right {
+        position: relative;
+        z-index: 2;
+
+        text-align: right;
+        min-width: 250px;
+    }
+
+    .rp-engine-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.48rem;
+
+        padding: 0.42rem 0.7rem;
+
+        border:
+            1px solid
+            rgba(110, 231, 183, 0.24);
+
+        border-radius: 999px;
+
+        background:
+            rgba(6, 78, 59, 0.25);
+
+        color: #a7f3d0;
+
+        font-size: 0.64rem;
+        font-weight: 820;
+        letter-spacing: 0.09em;
+    }
+
+    .rp-engine-dot {
+        width: 7px;
+        height: 7px;
+
+        border-radius: 999px;
+
+        background: #34d399;
+
+        box-shadow:
+            0 0 0 3px
+            rgba(52, 211, 153, 0.12);
+    }
+
+    .rp-engine-note {
+        margin-top: 0.48rem;
+
+        color: #91a9ca;
+
+        font-size: 0.69rem;
+        font-weight: 540;
+    }
+
+    /* ---------------------------------------------------------
+       Product navigation
+       --------------------------------------------------------- */
+
+    div[data-testid="stSegmentedControl"] {
+        margin-bottom: 0.3rem;
+    }
+
+    div[data-testid="stSegmentedControl"] > div {
+        background: #f5f8fc !important;
+        border: 1px solid #e0e8f2 !important;
+        border-radius: 10px !important;
+
+        padding: 3px !important;
+    }
+
+    div[data-testid="stSegmentedControl"] button {
+        min-height: 36px !important;
+
+        border: 0 !important;
+        border-radius: 7px !important;
+
+        color: #64748b !important;
+        background: transparent !important;
+
+        font-size: 0.78rem !important;
+        font-weight: 680 !important;
+
+        box-shadow: none !important;
+    }
+
+    div[data-testid="stSegmentedControl"]
+    button[aria-pressed="true"] {
+        color: #173b82 !important;
+        background: #ffffff !important;
+
+        box-shadow:
+            0 1px 3px rgba(15, 23, 42, 0.08),
+            inset 0 0 0 1px #dbe7fa !important;
+    }
+
+    @media (max-width: 850px) {
+        .block-container {
+            margin-top: 0 !important;
+            border-radius: 0 !important;
+        }
+
+        .rp-brand-shell {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .rp-brand-right {
+            min-width: 0;
+            text-align: left;
+        }
+    }
+
+
+    /* =========================================================
+       RiskPilot executive density pass
+       ========================================================= */
+
+    .block-container {
+        margin-top: 0.72rem !important;
+        padding:
+            0.95rem
+            1.35rem
+            2.4rem
+            1.35rem !important;
+        border-radius: 17px !important;
+    }
+
+    .rp-brand-shell {
+        min-height: 92px;
+        margin-bottom: 0.52rem;
+        padding: 0.92rem 1.15rem;
+        border-radius: 13px;
+    }
+
+    .rp-brand-mark {
+        width: 38px;
+        height: 38px;
+        flex-basis: 38px;
+        border-radius: 9px;
+    }
+
+    .rp-brand-name {
+        font-size: 1.08rem;
+    }
+
+    .rp-brand-category {
+        font-size: 0.61rem;
+        letter-spacing: 0.10em;
+    }
+
+    .rp-brand-promise {
+        margin-top: 0.48rem;
+        font-size: 0.79rem;
+    }
+
+    .rp-engine-status {
+        padding: 0.34rem 0.6rem;
+        font-size: 0.58rem;
+    }
+
+    .rp-engine-note {
+        margin-top: 0.34rem;
+        font-size: 0.61rem;
+    }
+
+    /* Compact product navigation */
+    div[data-testid="stSegmentedControl"] {
+        margin-top: 0 !important;
+        margin-bottom: 0.05rem !important;
+    }
+
+    div[data-testid="stSegmentedControl"] > div {
+        padding: 2px !important;
+    }
+
+    div[data-testid="stSegmentedControl"] button {
+        min-height: 32px !important;
+        padding: 0 0.75rem !important;
+        font-size: 0.72rem !important;
+    }
+
+    /* Tighten general Streamlit spacing inside the product */
+    div[data-testid="stVerticalBlock"] {
+        gap: 0.48rem;
+    }
+
     /* Primary actions */
     [data-testid="stBaseButton-primary"] {
         background: #1d4ed8 !important;
@@ -571,27 +936,35 @@ st.sidebar.caption(
 
 st.markdown(
     (
-        '<div class="riskpilot-product-header">'
-        '<div class="riskpilot-brand-lockup">'
-        '<div class="riskpilot-brand-mark">◈</div>'
-        '<div class="riskpilot-brand-text">'
-        '<div class="riskpilot-product-brand">RiskPilot</div>'
-        '<div class="riskpilot-product-tagline">'
-        'AI-powered liquidity decision intelligence'
-        '</div>'
-        '<div class="riskpilot-product-capabilities">'
-        'Forecast · uncertainty · recovery · grounded AI'
+        '<div class="rp-brand-shell">'
+        '<div class="rp-brand-left">'
+        '<div class="rp-brand-lockup">'
+        '<div class="rp-brand-mark">◈</div>'
+        '<div>'
+        '<div class="rp-brand-name">RiskPilot</div>'
+        '<div class="rp-brand-category">'
+        'AI Liquidity Decision Intelligence'
         '</div>'
         '</div>'
         '</div>'
-        '<div class="riskpilot-product-badge">'
-        'Decision Intelligence'
+        '<div class="rp-brand-promise">'
+        'See liquidity risk early. '
+        '<span>Know what to do next.</span>'
+        '</div>'
+        '</div>'
+        '<div class="rp-brand-right">'
+        '<div class="rp-engine-status">'
+        '<span class="rp-engine-dot"></span>'
+        'VERIFIED ENGINE'
+        '</div>'
+        '<div class="rp-engine-note">'
+        'Financial engines calculate · AI interprets'
+        '</div>'
         '</div>'
         '</div>'
     ),
     unsafe_allow_html=True,
 )
-
 
 product_area = st.segmented_control(
     "RiskPilot workspace",
@@ -706,7 +1079,37 @@ if page == "Command Center":
         command_center_mode
         == "V2 13-Week Liquidity"
     ):
-        render_v2_command_center()
+        data_workspace = st.segmented_control(
+            "RiskPilot data workspace",
+            [
+                "Explore demo",
+                "Use company data",
+            ],
+            default="Explore demo",
+            label_visibility="collapsed",
+            key="riskpilot_data_workspace",
+        )
+
+        if (
+            data_workspace
+            == "Use company data"
+        ):
+            customer_scenario = (
+                render_customer_onboarding()
+            )
+
+            if customer_scenario is None:
+                st.stop()
+
+            render_v2_command_center(
+                scenario_override=(
+                    customer_scenario
+                )
+            )
+
+        else:
+            render_v2_command_center()
+
         st.stop()
 
     command_context = get_forecast_context(
