@@ -2295,12 +2295,36 @@ def render_v2_command_center(
             scenario_override
         )
 
+        # Keep the customer-data baseline timestamp stable across
+        # Streamlit reruns. The Copilot signature includes created_at;
+        # regenerating it on every rerun would make the current brief
+        # look stale and clear the AI question / answer state whenever
+        # a user clicks a Copilot button.
+        customer_created_at_key = (
+            "riskpilot_customer_baseline_created_at_"
+            + scenario_id
+        )
+
+        if (
+            customer_created_at_key
+            not in st.session_state
+        ):
+            st.session_state[
+                customer_created_at_key
+            ] = datetime.now(
+                timezone.utc
+            )
+
+        customer_created_at = (
+            st.session_state[
+                customer_created_at_key
+            ]
+        )
+
         baseline_result = (
             build_command_center(
                 baseline_scenario,
-                created_at=datetime.now(
-                    timezone.utc
-                ),
+                created_at=customer_created_at,
                 simulations=2000,
                 seed=42,
             )

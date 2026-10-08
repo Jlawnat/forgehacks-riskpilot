@@ -159,6 +159,22 @@ def clear_customer_scenario() -> None:
         None,
     )
 
+    # A customer baseline timestamp is intentionally stable while
+    # the same imported scenario is active so Copilot state survives
+    # Streamlit reruns. When customer data is replaced, remove those
+    # timestamps so the next imported dataset receives a fresh
+    # baseline identity.
+    for key in list(
+        st.session_state.keys()
+    ):
+        if key.startswith(
+            "riskpilot_customer_baseline_created_at_"
+        ):
+            st.session_state.pop(
+                key,
+                None,
+            )
+
     clear_customer_history()
 
 
