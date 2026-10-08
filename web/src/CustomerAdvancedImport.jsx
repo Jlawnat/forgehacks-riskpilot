@@ -237,6 +237,11 @@ export default function CustomerAdvancedImport({ method, company, startDate, ope
         <h3>{method === "mapping" ? "Map an existing CSV or Excel file" : "Combine multiple finance sources"}</h3>
         <p>{method === "mapping" ? "Preview the file and confirm every critical column before validating the cash evidence." : "Import Accounts Receivable, Accounts Payable, payroll, tax or modelled cash files into one 13-week evidence set."}</p>
       </div>
+      {import.meta.env.PROD && <div className="mapping-safety-note" role="note">
+        <strong>Public judge sandbox:</strong> use fictional example files only. Synthetic sample dates follow your selected forecast start date. Keep that date unchanged after download; do not upload real company data.
+        <p><a href={`/api/demo/samples/cash.csv?forecast_start=${encodeURIComponent(startDate)}`} download>Full synthetic cash CSV</a> · <a href={`/api/demo/samples/cash.xlsx?forecast_start=${encodeURIComponent(startDate)}`} download>Full synthetic Excel</a></p>
+        <p>For Multiple Finance Sources, download both <a href={`/api/demo/samples/receipts.csv?forecast_start=${encodeURIComponent(startDate)}`} download>Receipts CSV</a> and <a href={`/api/demo/samples/payments.csv?forecast_start=${encodeURIComponent(startDate)}`} download>Payments CSV</a> (Excel: <a href={`/api/demo/samples/receipts.xlsx?forecast_start=${encodeURIComponent(startDate)}`} download>Receipts XLSX</a> and <a href={`/api/demo/samples/payments.xlsx?forecast_start=${encodeURIComponent(startDate)}`} download>Payments XLSX</a>). Choose the Other / Modelled Cash profile when the file contains mixed classifications, then review the mapped columns.</p>
+      </div>}
       {method === "mapping" ? (
         <MappingFile file={single.file} preview={single.preview} mapping={single.mapping}
           title="Choose existing CSV / Excel file" busy={busy}

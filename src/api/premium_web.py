@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field
 from src.ai.v2_context import V2CopilotContext
 from src.ai.v2_copilot import run_v2_copilot
 from src.api.verified_agent_workspace import build_verified_agent_workspace
+from src.api.public_interactive import (current_public_owner, require_demo_upload,
+                                        router as interactive_sample_router)
 from src.core.command_center import build_command_center
 from src.core.recovery_engine import RecoveryPlan, evaluate_recovery_plan
 from src.core.v2_what_if import V2WhatIfRequest, run_v2_what_if
@@ -95,7 +97,7 @@ def _save_customer_session(scenario, result):
             "scenario": scenario,
             "result": result,
             "expires_at": now + _CUSTOMER_TTL_SECONDS,
-            "capabilities": _customer_levers(scenario),
+            "capabilities": _customer_levers(scenario), "public_owner": current_public_owner(),
         }
     return token
 
@@ -109,6 +111,8 @@ def _load_customer_session(token):
             raise HTTPException(status_code=404, detail=(
                 "Customer analysis session not found. Re-import the cash CSV."
             ))
+        if current_public_owner() is not None and entry.get("public_owner") != current_public_owner():
+            raise HTTPException(status_code=404, detail="Customer session not found in this browser.")
         if entry["expires_at"] <= monotonic():
             del _CUSTOMER_SESSIONS[token]
             raise HTTPException(status_code=410, detail=(
@@ -864,6 +868,7 @@ async def customer_import(
         content = await file.read(_CUSTOMER_MAX_UPLOAD_BYTES + 1)
         if len(content) > _CUSTOMER_MAX_UPLOAD_BYTES:
             raise ValueError("CSV exceeds 5 MB limit for this local demo.")
+        require_demo_upload(content, file.filename, purpose="customer")
 
         dataframe = (
             parse_customer_cash_csv(
@@ -913,6 +918,8 @@ async def customer_import(
             seed=42,
         )
 
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=400,
@@ -1051,3 +1058,4 @@ async def customer_multi_import(
 # Additional premium workspaces reuse existing RiskPilot calculation engines.
 from src.api.premium_restoration import router as restoration_router
 app.include_router(restoration_router)
+app.include_router(interactive_sample_router)

@@ -72,6 +72,8 @@ async def read_table(file: UploadFile, sheet_name: str | None = None):
     raw = await file.read(MAX_FILE_BYTES + 1)
     if not raw or len(raw) > MAX_FILE_BYTES:
         raise HTTPException(status_code=413, detail="Each source must contain data and be no larger than 5 MB.")
+    from src.api.public_interactive import require_demo_upload
+    require_demo_upload(raw, filename, purpose="mapping")
     try:
         sheets = list_excel_sheets(raw) if suffix != ".csv" else ()
         selected_sheet = sheet_name or (sheets[0] if sheets else None)

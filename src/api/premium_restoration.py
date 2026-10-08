@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from src.core.forecast_monitoring import create_forecast_snapshot, compare_forecast_snapshots
+from src.api.public_interactive import (current_public_owner, history_storage_key, require_demo_upload)
 from src.core.recovery_optimizer import RecoverySearchConfig, optimize_recovery
 from src.core.recovery_constraints import (
     RevenueImprovementConstraint, CostReductionConstraint,
@@ -55,6 +56,8 @@ def _monthly_session(token: str):
         if session is None or session["expires_at"] <= monotonic():
             _MONTHLY.pop(token, None)
             raise HTTPException(404, "Monthly data session unavailable. Upload a monthly CSV again.")
+        if current_public_owner() is not None and session.get("public_owner") != current_public_owner():
+            raise HTTPException(404, "Monthly session unavailable in this browser.")
         return session
 
 
@@ -66,6 +69,7 @@ async def import_monthly(file: UploadFile = File(...), horizon: int = Form(3), r
     raw = await file.read(_MAX_UPLOAD + 1)
     if not raw or len(raw) > _MAX_UPLOAD:
         raise HTTPException(413, "Monthly CSV must be non-empty and under 5 MB.")
+    require_demo_upload(raw, file.filename, purpose="monthly")
     if not (1 <= horizon <= 12 and reserve >= 0 and 0 <= appetite <= 1):
         raise HTTPException(422, "Invalid monthly forecast horizon or risk policy.")
     from src.ingestion.loader import normalize_business_dataframe
@@ -89,7 +93,7 @@ async def import_monthly(file: UploadFile = File(...), horizon: int = Form(3), r
             oldest = min(_MONTHLY, key=lambda k: _MONTHLY[k]["expires_at"])
             del _MONTHLY[oldest]
         _MONTHLY[token] = {"frame": frame, "policy": policy, "context": context,
-                           "report": report, "expires_at": monotonic() + _TTL}
+                           "report": report, "public_owner": current_public_owner(), "expires_at": monotonic() + _TTL}
     return {"monthly_session_id": token, "scope": "legacy_monthly_not_v2_weekly",
             "periods": len(frame), "forecast_horizon_months": horizon, "data_quality": _payload(report)}
 
@@ -316,9 +320,9 @@ class SaveSnapshot(BaseModel):
 
 def _history_bucket(key):
     with _LOCK:
-        entry = _HISTORY.get(key)
+        entry = _HISTORY.get(history_storage_key(key))
         if entry is None or entry["expires_at"] <= monotonic():
-            _HISTORY.pop(key, None)
+            _HISTORY.pop(history_storage_key(key), None)
             return []
         return list(entry["items"])
 
@@ -339,9 +343,19 @@ def save_forecast_snapshot(payload: SaveSnapshot):
         snapshot_id=f"forecast-{token_urlsafe(12)}", created_at=current,
         management_reserve=scenario.management_reserve)
     with _LOCK:
+        # Bound in-memory history state under anonymous reviewer traffic.
+        if current_public_owner() is not None:
+            now = monotonic()
+            for old_key, item in list(_HISTORY.items()):
+                if item["expires_at"] <= now:
+                    _HISTORY.pop(old_key, None)
+            current_key = history_storage_key(payload.history_key)
+            if current_key not in _HISTORY and len(_HISTORY) >= 64:
+                oldest = min(_HISTORY, key=lambda k: _HISTORY[k]["expires_at"])
+                _HISTORY.pop(oldest, None)
         items = _history_bucket(payload.history_key)
         items.append(snapshot)
-        _HISTORY[payload.history_key] = {"expires_at": monotonic() + _TTL, "items": items[-12:]}
+        _HISTORY[history_storage_key(payload.history_key)] = {"expires_at": monotonic() + _TTL, "items": items[-12:]}
     return {"saved": _history_summary(snapshot), "history": [_history_summary(s) for s in items[-12:]]}
 
 
@@ -415,6 +429,7 @@ async def reconcile_forecast_actuals(
     raw = await file.read(2 * 1024 * 1024 + 1)
     if not raw or len(raw) > 2 * 1024 * 1024:
         raise HTTPException(413, "Actual cash CSV must be non-empty and under 2 MB.")
+    require_demo_upload(raw, file.filename, purpose="actuals")
     snapshots = {s.snapshot_id: s for s in _history_bucket(history_key)}
     if snapshot_id not in snapshots:
         raise HTTPException(404, "The chosen forecast snapshot is unavailable.")
