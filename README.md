@@ -1,5 +1,38 @@
 # RiskPilot
 
+<!-- RISKPILOT_PREMIUM_SHOWCASE_START -->
+
+## Premium React product · current development frontend
+
+**13-week AI liquidity decision intelligence, backed by verified Python financial engines.** The premium interface is built with React/Vite and connects to the existing RiskPilot API. It brings together liquidity forecasts, what-if questions, recovery decisions, customer cash evidence, and traceable AI explanations.
+
+**Run the current local premium frontend (WSL/Linux):**
+
+```bash
+cd forgehacks-riskpilot
+bash scripts/run_premium_web.sh
+```
+
+The frontend runs at `http://localhost:5173` and the API at `http://127.0.0.1:8000`. Install the Python requirements and `web/` Node dependencies before first launch as needed. For workspace features and financial boundaries, read [Premium Frontend](docs/PREMIUM_FRONTEND.md).
+
+| AI liquidity workflow | Financial evidence and trust |
+|---|---|
+| **Command Center · AI Agent · AI Scenario** | **Recovery Decision Center · Company Data · Methodology & Evidence** |
+| Validated 13-week liquidity, natural-language questions, temporary scenario modelling | Engine-backed recovery comparison, customer-data onboarding, source traceability and governance |
+
+### Approved premium design direction
+
+> **Design concepts only — not screenshots of the tested app.** Values, model rankings and interactions depicted in these images are illustrative and are **not** independently verified by the financial engines. The existing verified numerical results and governance records remain authoritative.
+
+[![Premium Command Center design reference](docs/design/approved-references/command-center.jpg)](docs/design/APPROVED_DESIGN_REFERENCES.md)
+
+[Browse all six approved frontend design references](docs/design/APPROVED_DESIGN_REFERENCES.md) · [View the premium frontend guide](docs/PREMIUM_FRONTEND.md)
+
+**Important:** The archived test counts, ABS external benchmark results and Streamlit screenshots further below refer to earlier validated checkpoints. They do not represent an automated acceptance test of the current React frontend.
+
+<!-- RISKPILOT_PREMIUM_SHOWCASE_END -->
+
+
 **AI Liquidity Decision Intelligence · for founders, CFOs and finance teams**
 
 ## See liquidity risk early. Know what to do next.

@@ -86,7 +86,7 @@ function MappingEditor({ preview, mapping, onChange }) {
           <input value={mapping.default_category} onChange={event => update("default_category", event.target.value)} />
         </label>
       </div>
-      <details className="mapping-preview">
+      <details className="mapping-preview" open>
         <summary>Preview first rows ({preview.row_count} total)</summary>
         <div className="mapping-table-scroll">
           <table>
@@ -119,11 +119,12 @@ function MappingFile({ file, preview, mapping, onFile, onSheet, onMapping, busy,
   );
 }
 
-export default function CustomerAdvancedImport({ method, company, startDate, openingCash, reserve, risk, uncertainty, onImported, setPage }) {
+export default function CustomerAdvancedImport({ method, company, startDate, openingCash, reserve, risk, uncertainty, onImported, setPage, policyValid = true, policyError = "" }) {
   const [single, setSingle] = useState({ file: null, preview: null, mapping: null });
   const [sources, setSources] = useState([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [evidenceConfirmed, setEvidenceConfirmed] = useState(false);
 
   const withPreview = async (file, sheet = "") => {
     if (!file) return { file: null, preview: null, mapping: null };
@@ -133,6 +134,7 @@ export default function CustomerAdvancedImport({ method, company, startDate, ope
 
   const chooseSingle = async file => {
     setSingle({ file, preview: null, mapping: null });
+    setEvidenceConfirmed(false);
     if (!file) return;
     setBusy(true); setMessage("");
     try { setSingle(await withPreview(file)); }
@@ -142,13 +144,14 @@ export default function CustomerAdvancedImport({ method, company, startDate, ope
 
   const selectSingleSheet = async sheet => {
     if (!single.file) return;
-    setBusy(true); setMessage("");
+    setBusy(true); setMessage(""); setEvidenceConfirmed(false);
     try { setSingle(await withPreview(single.file, sheet)); }
     catch (error) { setMessage(error.message); }
     finally { setBusy(false); }
   };
 
   const chooseMulti = async selectedFiles => {
+    setEvidenceConfirmed(false);
     const files = Array.from(selectedFiles || []);
     if (!files.length) { setSources([]); return; }
     if (files.length > 5) { setMessage("You can upload up to five finance files per analysis."); return; }
@@ -161,10 +164,12 @@ export default function CustomerAdvancedImport({ method, company, startDate, ope
   };
 
   const replaceSource = (index, next) => {
+    setEvidenceConfirmed(false);
     setSources(previous => previous.map((value, i) => i === index ? next : value));
   };
 
   const changeSourceSheet = async (index, sheet) => {
+    setEvidenceConfirmed(false);
     const current = sources[index];
     setBusy(true); setMessage("");
     try {
@@ -176,14 +181,20 @@ export default function CustomerAdvancedImport({ method, company, startDate, ope
   };
 
   const changeProfile = (index, source_id) => {
+    setEvidenceConfirmed(false);
     const current = sources[index];
     const profile = PROFILES.find(p => p.source_id === source_id);
     replaceSource(index, { ...current, source_id, mapping: initialMapping(current.preview, profile) });
   };
 
+  const multi = method === "multi";
+  const items = multi ? sources : [single];
+  const mappingsReady = items.length > 0 && items.every(item => item.file && item.preview && item.mapping && item.mapping.date_column && item.mapping.amount_column);
+  const sourcesReady = !multi || items.every(item => item.source_id);
+  const importReady = Boolean(policyValid && mappingsReady && sourcesReady && evidenceConfirmed);
   const executeImport = async () => {
-    const multi = method === "multi";
-    const items = multi ? sources : [single];
+    if (!policyValid) { setMessage(policyError || "Review the company policy before import."); return; }
+    if (!evidenceConfirmed) { setMessage("Confirm that you reviewed the evidence classifications before importing."); return; }
     if (!items.length || items.some(item => !item.file || !item.mapping || !item.mapping.date_column || !item.mapping.amount_column)) {
       setMessage("Upload your files and confirm cash date and amount columns first."); return;
     }
@@ -230,7 +241,7 @@ export default function CustomerAdvancedImport({ method, company, startDate, ope
         <MappingFile file={single.file} preview={single.preview} mapping={single.mapping}
           title="Choose existing CSV / Excel file" busy={busy}
           onFile={chooseSingle} onSheet={selectSingleSheet}
-          onMapping={mapping => setSingle(prev => ({ ...prev, mapping }))} />
+          onMapping={mapping => { setEvidenceConfirmed(false); setSingle(prev => ({ ...prev, mapping })); }} />
       ) : (
         <>
           <label className="mapping-file-input">Select up to five finance source files (CSV, XLSX or XLSM)
@@ -261,8 +272,10 @@ export default function CustomerAdvancedImport({ method, company, startDate, ope
           ))}
         </>
       )}
-      <div className="mapping-safety-note">Evidence controls: uploaded classifications are preserved when mapped. Unmapped evidence defaults to Management Assumption unless you explicitly choose a different classification. Committed cash dates and amounts are never changed by this import process.</div>
-      <button className="big-blue-button" type="button" disabled={busy} onClick={executeImport}>
+      <div className="mapping-safety-note" role="note"><strong>Evidence classification requires review.</strong> Mapped source classifications are preserved. Without a mapped classification, AR, AP, payroll and tax profiles may default to COMMITTED. Source labels alone do not verify a transaction.; only use this status where documentary evidence supports each item. Other defaults to Management Assumption. Labels alone do not verify transactions.</div>
+      <label className="evidence-confirmation"><input type="checkbox" checked={evidenceConfirmed} disabled={busy || !mappingsReady || !sourcesReady} onChange={event => setEvidenceConfirmed(event.target.checked)} /> I have reviewed source types and verified that any COMMITTED classification is supported by appropriate records.</label>
+      <p className="mapping-readiness" role="status">{!policyValid ? (policyError || "Review company policy to proceed.") : !mappingsReady ? "Upload file(s) and confirm required date and amount mappings." : !sourcesReady ? "Select a finance source profile for every file." : !evidenceConfirmed ? "Confirm classification review to enable validation." : "Ready to validate with the existing RiskPilot financial engines."}</p>
+      <button className="big-blue-button" type="button" disabled={busy || !importReady} onClick={executeImport}>
         {busy ? "Processing finance data..." : "Validate mapped evidence & run RiskPilot →"}
       </button>
       {message && <div className="import-message" role="status">{message}</div>}

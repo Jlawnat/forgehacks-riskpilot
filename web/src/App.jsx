@@ -1,4 +1,6 @@
+import { LegacyMonthlyWorkspace, RecoveryOptimizerWorkspace, HistoryEvidenceWorkspace } from "./RestoredWorkspaces.jsx";
 import CustomerAdvancedImport from "./CustomerAdvancedImport.jsx";
+import AgentEvidenceWorkspace from "./AgentEvidenceWorkspace.jsx";
 import AiMarkdown from "./AiMarkdown.jsx";
 import React, {
   useEffect,
@@ -203,8 +205,6 @@ function CashChart({
   data,
   showScenario = false,
 }) {
-  const [requestedPeriod, setRequestedPeriod] = useState(13);
-
   if (!data) {
     return null;
   }
@@ -351,37 +351,9 @@ function CashChart({
           </p>
         </div>
 
-        <div className="range-tabs" role="group" aria-label="Forecast horizon">
-          {[13, 26, 52].map(weeks => (
-            <button
-              key={weeks}
-              type="button"
-              className={requestedPeriod === weeks ? "selected" : ""}
-              aria-pressed={requestedPeriod === weeks}
-              onClick={() => setRequestedPeriod(weeks)}
-              title={weeks === verifiedPeriod
-                ? "Display verified cash forecast"
-                : "Check whether a verified forecast is available"}
-            >
-              {weeks} weeks
-            </button>
-          ))}
-        </div>
+        <span className="verified-horizon" title="The current direct-cash engine validates 13 forecast weeks only">13-week verified forecast</span>
       </div>
 
-      {requestedPeriod !== verifiedPeriod ? (
-        <div className="horizon-unavailable" role="status">
-          <strong>{requestedPeriod}-week forecast is not available</strong>
-          <p>
-            This API supplies {validatedWeeks} verified weekly cash values. RiskPilot will
-            not extrapolate financial forecasts or reuse 13-week risk estimates for
-            a longer horizon without a validated engine result.
-          </p>
-          <button type="button" onClick={() => setRequestedPeriod(verifiedPeriod)}>
-            Return to validated {validatedWeeks}-week analysis →
-          </button>
-        </div>
-      ) : <>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="cash-svg"
@@ -509,7 +481,6 @@ function CashChart({
           ))}</tbody>
         </table></div>
       </details>
-      </>}
     </div>
   );
 }
@@ -810,7 +781,7 @@ function CommandCenter({
                 setPage("recovery")
               )}
             >
-              ✦ Open recovery decision example →
+              ✦ Review recovery decisions →
             </button>
           </div>
         </div>
@@ -830,6 +801,7 @@ function AgentPage({
   setHistory,
   initialQuestion = "",
 }) {
+  const [analysisMode, setAnalysisMode] = useState("weekly");
   const [
     question,
     setQuestion,
@@ -848,9 +820,14 @@ function AgentPage({
   const questionExamples = [
     "What is our current liquidity position and reserve headroom?",
     "What is driving cash movement over the next 13 weeks?",
-    "What if modelled revenue falls 20% and operating costs rise 10% over the next 13 weeks?",
+    ...(data?.scenario?.what_if_capabilities?.modelled_revenue_events && data?.scenario?.what_if_capabilities?.modelled_cost_events
+      ? ["What if modelled revenue falls 20% and operating costs rise 10% over the next 13 weeks?"] : []),
     "Which recovery actions should management consider?",
     "What should management monitor next?",
+    "Which evidence is COMMITTED, MODELLED or a management assumption?",
+    "What financial evidence supports the current liquidity risk assessment?",
+    "Is our existing recovery plan sufficient without additional financing?",
+    "Explain the cash actions and monitoring triggers in our 13-week brief.",
   ];
 
   const runAgent = async () => {
@@ -1004,7 +981,12 @@ function AgentPage({
         ]}
       />
 
-      <div className="product-surface">
+      <div className="analysis-mode-switch" role="tablist" aria-label="AI analysis model">
+        <button type="button" role="tab" aria-selected={analysisMode === "weekly"} className={analysisMode === "weekly" ? "active" : ""} onClick={() => setAnalysisMode("weekly")}>13-week liquidity AI</button>
+        <button type="button" role="tab" aria-selected={analysisMode === "monthly"} className={analysisMode === "monthly" ? "active" : ""} onClick={() => setAnalysisMode("monthly")}>Advanced monthly analyst</button>
+        <small>Independent models; never mix monthly and weekly evidence.</small>
+      </div>
+      {analysisMode === "weekly" ? <div className="product-surface">
         <section className="agent-composer" aria-label="Ask RiskPilot AI">
           <div className="agent-composer-heading">
             <div className="question-icon">✦</div>
@@ -1264,6 +1246,17 @@ function AgentPage({
             </tbody>
           </table>
         </div>
+        <AgentEvidenceWorkspace
+          scenarioId={scenarioId}
+          importedMode={importedMode}
+          customerSessionId={customerSessionId}
+          toolsUsed={tools}
+          onAskQuestion={text => {
+            setQuestion(text);
+            setResponse(null);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
         <section className="analysis-history">
           <div className="panel-title-row">
             <div>
@@ -1286,13 +1279,14 @@ function AgentPage({
               </details>
             ))}
         </section>
-      </div>
+      </div> : <LegacyMonthlyWorkspace />}
     </>
   );
 }
 
 
 function ScenarioPage({
+  setPage,
   scenarioId,
   data,
   scenarios = [],
@@ -1320,8 +1314,13 @@ function ScenarioPage({
   const [scenarioQuestion, setScenarioQuestion] = useState("");
   const [scenarioHistory, setScenarioHistory] = useState([]);
   const [error, setError] = useState("");
-  const revenueSupported = !importedMode || !!customerCapabilities?.modelled_revenue_events;
-  const costSupported = !importedMode || !!customerCapabilities?.modelled_cost_events;
+  const availableLevers = importedMode ? customerCapabilities : data?.scenario?.what_if_capabilities;
+  const revenueSupported = !!availableLevers?.modelled_revenue_events;
+  const costSupported = !!availableLevers?.modelled_cost_events;
+  useEffect(() => {
+    if (data?.scenario?.id && !revenueSupported) setRevenue(0);
+    if (data?.scenario?.id && !costSupported) setCost(0);
+  }, [data?.scenario?.id, revenueSupported, costSupported]);
   useEffect(() => {
     if (importedMode) {
       setRevenue(0);
@@ -1354,6 +1353,10 @@ function ScenarioPage({
     }
     setError("");
     setResult(null);
+    if ((Number(revenue) !== 0 && !revenueSupported) || (Number(cost) !== 0 && !costSupported)) {
+      setError("This scenario contains no eligible MODELLED events for the requested shock. Choose an eligible synthetic demo, or change only the management reserve.");
+      return;
+    }
     if (revenue === "" || cost === "" ||
         !Number.isFinite(Number(revenue)) || !Number.isFinite(Number(cost)) ||
         Number(revenue) < -100 || Number(revenue) > 100 ||
@@ -1488,8 +1491,7 @@ function ScenarioPage({
                 <button type="button" key={preset.name}
                   className={Number(revenue) === preset.revenue && Number(cost) === preset.cost
                     ? "scenario-preset active" : "scenario-preset"}
-                  disabled={running || (importedMode &&
-                    ((preset.revenue !== 0 && !revenueSupported) || (preset.cost !== 0 && !costSupported)))}
+                  disabled={running || (preset.revenue !== 0 && !revenueSupported) || (preset.cost !== 0 && !costSupported)}
                   onClick={() => {
                     updateRevenue(preset.revenue);
                     updateCost(preset.cost);
@@ -1514,7 +1516,7 @@ function ScenarioPage({
                 onChange={event => updateRevenue(event.target.value)} />
               <small>{revenueSupported
                 ? "Only MODELLED residual sales receipts are adjusted; COMMITTED evidence stays fixed."
-                : "Unavailable: no MODELLED residual sales receipts in this upload."}</small>
+                : "Not available: this scenario has no eligible MODELLED residual sales receipts."}</small>
             </label>
             <label className="scenario-lever">
               <span>OPERATING COST CHANGE <b>{cost === "" ? "—" : `${cost}%`}</b></span>
@@ -1526,7 +1528,7 @@ function ScenarioPage({
                 onChange={event => updateCost(event.target.value)} />
               <small>{costSupported
                 ? "Only MODELLED variable operating costs are adjusted; COMMITTED evidence stays fixed."
-                : "Unavailable: no MODELLED variable operating costs in this upload."}</small>
+                : "Not available: this scenario has no eligible MODELLED variable operating costs."}</small>
             </label>
             <label className="scenario-lever">
               <span>MANAGEMENT RESERVE <b>{managementReserve === "" ? "Use policy" : money(managementReserve)}</b></span>
@@ -1563,6 +1565,7 @@ function ScenarioPage({
             onChange={event => setScenarioQuestion(event.target.value)} />
           <button type="button" disabled={(importedMode && !customerSessionId) || !scenarioQuestion.trim()}
             onClick={() => onAskAgent(scenarioQuestion.trim())}>Ask AI Agent →</button>
+          <button type="button" className="scenario-text-button" onClick={() => setPage("agent")}>Advanced monthly risk analysis ↗</button>
         </section>
         {importedMode && <div role="status" className="workflow-notice success">
           Active customer data: {data?.scenario?.name}. Only matching MODELLED categories
@@ -1570,10 +1573,13 @@ function ScenarioPage({
           {" "}{customerCapabilities?.modelled_revenue_events ?? 0} events; cost eligible:
           {" "}{customerCapabilities?.modelled_cost_events ?? 0} events. Receivable timing changes are not supported by this V2 engine.
         </div>}
+        {data?.scenario?.is_public && <div className="workflow-notice" role="note">Public SEC filing cash paths are source forecasts, not adjustable MODELLED sales/cost categories. Use Harborview Components (Synthetic Demo) to demonstrate operating shocks.</div>}
         {error && <div role="alert" className="error-box">{error}</div>}
         <div className={result ? "workflow-notice success" : "workflow-notice"} role="status">
           {result
-            ? "Verified temporary scenario result below. Changes do not overwrite the baseline."
+            ? result.effect?.neutral_recalculation
+              ? "BASELINE RECALCULATION — No forecast-changing assumption was applied."
+              : `VERIFIED SCENARIO — ${result.effect?.revenue_events_adjusted ?? 0} revenue and ${result.effect?.cost_events_adjusted ?? 0} cost events adjusted${result.effect?.reserve_policy_adjusted ? "; reserve policy changed" : ""}. The baseline is unchanged.`
             : "BASELINE PREVIEW — Press Run new scenario to calculate the inputs above."}
         </div>
 
@@ -1772,8 +1778,10 @@ function ScenarioPage({
 }
 
 
-function RecoveryPage({ scenarioId, importedMode = false }) {
-  const [targetScenarioId, setTargetScenarioId] = useState("stressed_recoverable");
+function RecoveryPage({ scenarioId, importedMode = false, customerSessionId = null }) {
+  const [targetScenarioId, setTargetScenarioId] = useState(scenarioId);
+  const [recoveryMode, setRecoveryMode] = useState("optimise");
+  useEffect(() => { setTargetScenarioId(scenarioId); }, [scenarioId]);
   const [error, setError] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [
@@ -1791,6 +1799,7 @@ function RecoveryPage({ scenarioId, importedMode = false }) {
     setPayload(null);
     setError("");
     setDetailsOpen(false);
+    if (importedMode) return () => { cancelled = true; };
     fetch(`${API}/recovery-options/${encodeURIComponent(targetScenarioId)}`)
       .then(async response => {
         const body = await response.json();
@@ -1800,7 +1809,16 @@ function RecoveryPage({ scenarioId, importedMode = false }) {
       .then(body => { if (!cancelled) {setPayload(body); setSelected(0);} })
       .catch(err => { if (!cancelled) setError(err.message); });
     return () => { cancelled = true; };
-  }, [targetScenarioId]);
+  }, [targetScenarioId, importedMode]);
+
+  if (importedMode) {
+    return <>
+      <Hero eyebrow="RECOVERY INTELLIGENCE" title="Recovery" accent="Decision Center"
+        subtitle="Optimise the recovery constraints for your own imported cash evidence. No demo figures are mixed into this analysis."
+        features={[["◇", "Customer recovery", "From your imported 13-week cash evidence"]]}/>
+      <RecoveryOptimizerWorkspace scenarioId={scenarioId} importedMode customerSessionId={customerSessionId}/>
+    </>;
+  }
 
   if (!payload) {
     return <>
@@ -1810,8 +1828,8 @@ function RecoveryPage({ scenarioId, importedMode = false }) {
       <div className="product-surface">
         {error ? <div className="workflow-notice" role="alert">
           <strong>Recovery is unavailable for this scenario.</strong> {error}
-          <button type="button" onClick={() => setTargetScenarioId("stressed_recoverable")}>
-            Open validated stressed recovery example →
+          <button type="button" onClick={() => setTargetScenarioId("harborview_synthetic")}>
+            Open synthetic Harborview recovery example →
           </button>
         </div> : <Loading />}
       </div>
@@ -1857,23 +1875,27 @@ function RecoveryPage({ scenarioId, importedMode = false }) {
         ]}
       />
 
-      <div className="product-surface">
+      <div className="analysis-mode-switch" role="tablist" aria-label="Recovery analysis mode">
+        <button type="button" role="tab" aria-selected={recoveryMode === "optimise"} className={recoveryMode === "optimise" ? "active" : ""} onClick={() => setRecoveryMode("optimise")}>Optimise recovery</button>
+        <button type="button" role="tab" aria-selected={recoveryMode === "reference"} className={recoveryMode === "reference" ? "active" : ""} onClick={() => setRecoveryMode("reference")}>Compare reference plans</button>
+        <small>{payload.scenario.scenario.name} · same verified scenario</small>
+      </div>
+      {recoveryMode === "optimise" ? <RecoveryOptimizerWorkspace scenarioId={targetScenarioId} importedMode={false} customerSessionId={null}/> : <div className="product-surface">
         <div className="recovery-context">
           <div>
             <b>Recovery evidence: {payload.scenario.scenario.name}</b>
-            <p>{importedMode
-              ? "DEMO ONLY — this recovery comparison is not based on your uploaded company. Custom recovery constraints are not connected yet."
-              : targetScenarioId === scenarioId
+            <p>{targetScenarioId === scenarioId
                 ? "Evaluating recovery constraints for the selected scenario."
                 : "This page shows a separate verified recovery example, not the active Command Center scenario."}</p>
           </div>
           {!importedMode && targetScenarioId !== scenarioId && <button type="button" onClick={() => setTargetScenarioId(scenarioId)}>
             Try current scenario →
           </button>}
-          {targetScenarioId !== "stressed_recoverable" && <button type="button" onClick={() => setTargetScenarioId("stressed_recoverable")}>
+          {targetScenarioId !== "harborview_synthetic" && <button type="button" onClick={() => setTargetScenarioId("harborview_synthetic")}>
             View recovery example
           </button>}
         </div>
+        <p className="restore-description">Verified reference plans use the selected scenario's existing recovery constraints. They are not additional optimiser search results.</p>
         <div className="recovery-cards">
           {options.map(
             (option, index) => (
@@ -1899,14 +1921,14 @@ function RecoveryPage({ scenarioId, importedMode = false }) {
 
                   <div>
                     <h3>{option.name}</h3>
-                    <p>{option.subtitle}</p>
+                    <p>{option.subtitle === "Recommended" ? "Reference plan · not a probabilistic recommendation" : option.subtitle}</p>
                   </div>
 
-                  {index === 0 && (
-                    <span className="recommended-chip">
-                      ✦ RECOMMENDED
-                    </span>
-                  )}
+                  <span className={option.evaluation.feasible && option.validation.within_risk_appetite
+                    ? "reference-risk-label eligible" : "reference-risk-label ineligible"}>
+                    {option.evaluation.feasible && option.validation.within_risk_appetite
+                      ? "✓ WITHIN MODELLED APPETITE" : "! EXCEEDS RISK APPETITE"}
+                  </span>
                 </div>
 
                 <div className="recovery-metrics">
@@ -1951,18 +1973,15 @@ function RecoveryPage({ scenarioId, importedMode = false }) {
                   <b>Recovery actions</b>
                   <span>
                     Revenue recovery:{" "}
-                    {option.plan
-                      .revenue_improvement_pct}%
+                    {Number(option.plan.revenue_improvement_pct) === 0 ? "Not used" : `${option.plan.revenue_improvement_pct}%`}
                   </span>
                   <span>
                     Cost reduction:{" "}
-                    {option.plan
-                      .cost_reduction_pct}%
+                    {Number(option.plan.cost_reduction_pct) === 0 ? "Not used" : `${option.plan.cost_reduction_pct}%`}
                   </span>
                   <span>
                     Collections faster:{" "}
-                    {option.plan
-                      .receivable_acceleration_days} days
+                    {Number(option.plan.receivable_acceleration_days) === 0 ? "Not used" : `${option.plan.receivable_acceleration_days} days`}
                   </span>
                 </div>
               </button>
@@ -2163,6 +2182,7 @@ function RecoveryPage({ scenarioId, importedMode = false }) {
               <div><small>Reserve breach probability</small><b>{pct(active.validation.reserve_breach_probability)}</b></div>
               <div><small>Allowed probability</small><b>{pct(active.validation.max_acceptable_breach_probability)}</b></div>
             </div>
+            <p className="reference-risk-explanation">Reserve-breach probability is a simulated estimate from the validated engine. An observed 0.0% breach rate in finite simulations is not a guarantee of zero real-world risk.</p>
             <h3>Operating interventions</h3>
             <div className="details-metrics">
               <div><small>Revenue recovery</small><b>{active.plan.revenue_improvement_pct}%</b></div>
@@ -2174,8 +2194,8 @@ function RecoveryPage({ scenarioId, importedMode = false }) {
               Deterministic feasibility: <b>{active.evaluation.feasible ? "YES" : "NO"}</b>
               {" · "}Within management risk appetite: <b>{active.validation.within_risk_appetite ? "YES" : "NO"}</b>
             </div>
-            <details className="recovery-raw">
-              <summary>View full verified engine response</summary>
+            <details className="recovery-raw advanced-diagnostics">
+              <summary>Advanced diagnostics · verified JSON</summary>
               <pre>{JSON.stringify({
                 plan: active.plan,
                 evaluation: active.evaluation,
@@ -2184,7 +2204,7 @@ function RecoveryPage({ scenarioId, importedMode = false }) {
             </details>
           </section>
         </div>}
-      </div>
+      </div>}
     </>
   );
 }
@@ -2195,7 +2215,7 @@ function CustomerPage({
   onImported,
 }) {
   const today = (
-    new Date()
+    new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 10)
   );
@@ -2245,7 +2265,19 @@ function CustomerPage({
     setMessage,
   ] = useState("");
 
+  const [importBusy, setImportBusy] = useState(false);
+  const policyErrors = [
+    !company.trim() && "Enter a company / workspace name.",
+    !/^\d{4}-\d{2}-\d{2}$/.test(startDate) && "Choose a valid forecast start date.",
+    (openingCash === "" || !Number.isFinite(Number(openingCash)) || Number(openingCash) < 0) && "Opening cash must be a non-negative amount.",
+    (reserve === "" || !Number.isFinite(Number(reserve)) || Number(reserve) < 0) && "Management reserve must be non-negative.",
+    (risk === "" || !Number.isFinite(Number(risk)) || Number(risk) < 0 || Number(risk) > 100) && "Maximum breach risk must be between 0% and 100%.",
+  ].filter(Boolean);
+  const policyValid = policyErrors.length === 0;
+
   const upload = async () => {
+    if (importBusy) return;
+    if (!policyValid) { setMessage(policyErrors[0]); return; }
     if (!file) {
       setMessage(
         "Choose a RiskPilot cash-event CSV first."
@@ -2253,6 +2285,7 @@ function CustomerPage({
       return;
     }
 
+    setImportBusy(true);
     const form = new FormData();
 
     form.append("file", file);
@@ -2314,6 +2347,8 @@ function CustomerPage({
       setPage("command");
     } catch (error) {
       setMessage(error.message);
+    } finally {
+      setImportBusy(false);
     }
   };
 
@@ -2396,14 +2431,14 @@ function CustomerPage({
 
             <div>
               <h2>
-                Build a 13-week liquidity view
-                from your own cash evidence
+                Company Data Onboarding
               </h2>
 
               <p>
                 Import dated cash evidence and run
                 the same verified engines used by
-                the Command Center.
+                the Command Center. Your uploaded evidence and
+                policy determine the forecast — not the demo data.
               </p>
             </div>
           </div>
@@ -2461,7 +2496,7 @@ function CustomerPage({
               </label>
 
               <label>
-                Forecast start date
+                Forecast start date (shown in your local date format)
                 <input
                   type="date"
                   value={startDate}
@@ -2508,6 +2543,8 @@ function CustomerPage({
                 </select>
               </label>
             </div>
+            <p className="customer-policy-hint">Financial event dates are interpreted against the selected forecast start. The date picker displays your browser's locale, but the API receives an ISO YYYY-MM-DD date. A synthetic CSV may have a different schedule.</p>
+            {policyErrors.length > 0 && <div className="import-message" role="alert">{policyErrors[0]}</div>}
           </section>
 
           <section className="form-section">
@@ -2573,6 +2610,8 @@ function CustomerPage({
                 uncertainty={uncertainty}
                 onImported={onImported}
                 setPage={setPage}
+                policyValid={policyValid}
+                policyError={policyErrors[0] || ""}
               />
             ) : (
               <>
@@ -2582,7 +2621,8 @@ function CustomerPage({
                   <span>Choose a file containing dated cash events.</span>
                   <label className="file-button">Choose file
                     <input type="file" accept=".csv"
-                      onChange={event => setFile(event.target.files[0])} />
+                      disabled={importBusy}
+                      onChange={event => { setFile(event.target.files?.[0] || null); setMessage(""); }} />
                   </label>
                   {file && <small>Selected: {file.name}</small>}
                   <div className="template-strip">
@@ -2590,11 +2630,13 @@ function CustomerPage({
                     <a href={`${API}/customer/template?forecast_start=${startDate}`}>
                       Download CSV template
                     </a>
+                    <a href={`${API}/demo/harborview-cash.csv`} download="RiskPilot_Harborview_Synthetic_Cash_Demo.csv">Download synthetic stress-test demo CSV (fixed dates)</a>
                   </div>
                 </div>
-                <button className="big-blue-button" onClick={upload}>
-                  Validate evidence & run RiskPilot →
+                <button className="big-blue-button" type="button" disabled={importBusy || !file || !policyValid} onClick={upload}>
+                  {importBusy ? "Validating financial evidence..." : "Validate evidence & run RiskPilot →"}
                 </button>
+                {!file && <p className="customer-policy-hint">Choose a cash-event CSV to enable import. Demo event dates must be compatible with Forecast Start Date.</p>}
                 {message && <div className="import-message">{message}</div>}
               </>
             )}
@@ -2607,9 +2649,11 @@ function CustomerPage({
 
 
 function EvidencePage({
-  data,
+  data, scenarioId, customerSessionId = null, importedMode = false, historyKey,
 }) {
   const [selectedSource, setSelectedSource] = useState(null);
+  const [evidenceView, setEvidenceView] = useState("classification");
+  const [workspaceTab, setWorkspaceTab] = useState("evidence");
   if (!data) {
     return <Loading />;
   }
@@ -2632,19 +2676,6 @@ function EvidencePage({
       data.position.assumption_amount,
       "Explicit management assumptions",
       "purple",
-    ],
-    [
-      "Public source",
-      data.scenario.is_public
-        ? data.events.reduce(
-          (sum, event) => (
-            sum + Math.abs(event.amount)
-          ),
-          0
-        )
-        : 0,
-      "Public filings and source materials",
-      "orange",
     ],
   ];
 
@@ -2678,16 +2709,20 @@ function EvidencePage({
         ]}
       />
 
-      <div className="product-surface">
+      <div className="analysis-mode-switch" role="tablist" aria-label="Governance workspace">
+        <button type="button" role="tab" aria-selected={workspaceTab === "evidence"} className={workspaceTab === "evidence" ? "active" : ""} onClick={() => setWorkspaceTab("evidence")}>Methodology & source evidence</button>
+        <button type="button" role="tab" aria-selected={workspaceTab === "monitoring"} className={workspaceTab === "monitoring" ? "active" : ""} onClick={() => setWorkspaceTab("monitoring")}>Forecast monitoring & reports</button>
+        <small>13-week outputs · audit-ready provenance</small>
+      </div>
+      {workspaceTab === "evidence" ? <div className="product-surface">
         <div className="governance-header">
           <div>
             <h2>
-              ◇ AI Model Governance Recommendation
+              ◇ Verified Model Governance
             </h2>
 
             <p>
-              Current 13-week liquidity engine and
-              evidence-governance view.
+              Read-only model boundary, evidence and provenance for the current 13-week forecast.
             </p>
           </div>
 
@@ -2766,7 +2801,18 @@ function EvidencePage({
               ◎ Evidence basis & classification
             </h3>
 
-            {evidenceRows.map(
+            <div className="evidence-dimension-tabs" role="tablist" aria-label="Evidence dimensions">
+              <button type="button" role="tab" aria-selected={evidenceView === "classification"} onClick={() => setEvidenceView("classification")} className={evidenceView === "classification" ? "active" : ""}>Financial classification</button>
+              <button type="button" role="tab" aria-selected={evidenceView === "provenance"} onClick={() => setEvidenceView("provenance")} className={evidenceView === "provenance" ? "active" : ""}>Source provenance</button>
+            </div>
+            <p className="classification-explanation">{evidenceView === "classification"
+              ? "Classification describes cash-event evidence (COMMITTED, MODELLED or MANAGEMENT_ASSUMPTION). Evidence coverage is not a confidence probability."
+              : "Source provenance is a separate dimension, not an extra amount to add to classified cash. Public SEC forecasts remain MODELLED, not COMMITTED."}</p>
+            {evidenceView === "provenance" ? <div className="evidence-provenance-overview">
+              <strong>{data.scenario.is_public ? "SEC-filed public forecast" : data.scenario.is_synthetic ? "Fictional demonstration" : "Business source records"}</strong>
+              <span>{data.sources.length} documented source reference(s) · {data.events.length} cash events</span>
+              <span>{data.scenario.is_public ? "The public filing and modelled cash refer to the same underlying event set; these are not additive amounts." : "Check the source table below for original references and classifications."}</span>
+            </div> : evidenceRows.map(
               (
                 [name, amount, copy, tone]
               ) => (
@@ -2889,7 +2935,9 @@ function EvidencePage({
             )}
           </div>
         </div>
-      </div>
+      </div> : <div className="product-surface premium-inset-workspace">
+        <HistoryEvidenceWorkspace scenarioId={scenarioId} customerSessionId={customerSessionId} importedMode={importedMode} historyKey={historyKey} />
+      </div>}
     </>
   );
 }
@@ -2910,7 +2958,7 @@ export default function App() {
     scenarioId,
     setScenarioId,
   ] = useState(
-    "public_sec_cenveo"
+    "harborview_synthetic"
   );
 
   const [
@@ -2924,6 +2972,13 @@ export default function App() {
   ] = useState(null);
 
   const [customerSession, setCustomerSession] = useState(null);
+  const [historyKey] = useState(() => {
+    const key = window.sessionStorage.getItem("riskpilot-forecast-history-key");
+    if (key && key.length >= 20) return key;
+    const next = window.crypto.randomUUID();
+    window.sessionStorage.setItem("riskpilot-forecast-history-key", next);
+    return next;
+  });
   const [agentHistory, setAgentHistory] = useState([]);
   const [agentDraft, setAgentDraft] = useState("");
   useEffect(() => { setAgentHistory([]); setAgentDraft(""); }, [scenarioId, customerSession?.id]);
@@ -3013,6 +3068,7 @@ export default function App() {
 
         {page === "scenario" && (
           <ScenarioPage
+            setPage={setPage}
             data={activeData}
             scenarioId={scenarioId}
             scenarios={scenarios}
@@ -3026,7 +3082,7 @@ export default function App() {
         )}
 
         {page === "recovery" && (
-          <RecoveryPage scenarioId={scenarioId} importedMode={!!importedData} />
+          <RecoveryPage scenarioId={scenarioId} importedMode={!!importedData} customerSessionId={customerSession?.id} />
         )}
 
         {page === "customer" && (
@@ -3039,6 +3095,10 @@ export default function App() {
         {page === "evidence" && (
           <EvidencePage
             data={activeData}
+            scenarioId={scenarioId}
+            customerSessionId={customerSession?.id}
+            importedMode={!!importedData}
+            historyKey={historyKey}
           />
         )}
       </main>

@@ -1,25 +1,28 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+import csv
+from io import StringIO
 from io import BytesIO
 from secrets import token_urlsafe
 from threading import RLock
 from time import monotonic
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from src.ai.v2_context import V2CopilotContext
 from src.ai.v2_copilot import run_v2_copilot
+from src.api.verified_agent_workspace import build_verified_agent_workspace
 from src.core.command_center import build_command_center
 from src.core.recovery_engine import RecoveryPlan, evaluate_recovery_plan
 from src.core.v2_what_if import V2WhatIfRequest, run_v2_what_if
 from src.core.weekly_recovery_validation import validate_weekly_recovery_plan
-from src.demo.v2_scenarios import (
-    get_v2_demo_scenario,
-    get_v2_demo_scenarios,
+from src.api.premium_demo import (
+    DEMO_ID, available_premium_scenarios, resolve_premium_scenario,
 )
 from src.ingestion.customer_cash import (
     build_customer_cash_events,
@@ -62,6 +65,7 @@ def _customer_levers(scenario):
     def eligible(direction, category):
         return [event for event in events if
                 event.source_type == "MODELLED" and
+                getattr(event, "status", "ACTIVE") == "ACTIVE" and
                 event.direction == direction and
                 event.category == category]
     receipts = eligible("INFLOW", "residual sales receipts")
@@ -127,7 +131,7 @@ def _validate_customer_what_if(payload, entry):
             and not caps["modelled_revenue_events"]):
         raise HTTPException(status_code=422, detail=(
             "No eligible MODELLED 'residual sales receipts' cash events exist "
-            "in this upload. Revenue changes cannot alter committed evidence. "
+            "in the selected forecast. Revenue changes cannot alter committed evidence. "
             "Add supported modelled sales events, or set revenue change to 0%."
         ))
     if (payload.cost_change_pct is not None
@@ -135,7 +139,7 @@ def _validate_customer_what_if(payload, entry):
             and not caps["modelled_cost_events"]):
         raise HTTPException(status_code=422, detail=(
             "No eligible MODELLED 'variable operating costs' cash events exist "
-            "in this upload. Cost changes cannot alter committed evidence. "
+            "in the selected forecast. Cost changes cannot alter committed evidence. "
             "Add supported modelled cost events, or set cost change to 0%."
         ))
 
@@ -160,7 +164,7 @@ def _command_center_result(
     scenario_id: str,
 ):
     try:
-        scenario = get_v2_demo_scenario(
+        scenario = resolve_premium_scenario(
             scenario_id
         )
     except ValueError as exc:
@@ -345,10 +349,9 @@ def _summary(
                 scenario.management_reserve
             ),
             "risk_appetite": appetite,
-            "is_public": (
-                scenario.scenario_id
-                == "public_sec_cenveo"
-            ),
+            "is_public": scenario.scenario_id == "public_sec_cenveo",
+            "is_synthetic": scenario.scenario_id == DEMO_ID,
+            "what_if_capabilities": _customer_levers(scenario),
         },
         "position": {
             "current_cash": float(
@@ -445,6 +448,27 @@ def health():
     }
 
 
+@app.get("/api/demo/harborview-cash.csv")
+def synthetic_demo_csv():
+    """Provide an openly labelled fictional cash-event file for customers to try."""
+    demo = resolve_premium_scenario(DEMO_ID)
+    columns = (
+        "event_id", "date", "amount", "direction", "category",
+        "source_type", "status", "description", "source_reference",
+        "due_date", "expected_cash_date",
+    )
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=columns)
+    writer.writeheader()
+    for event in demo.forecast_input.events:
+        row = event.model_dump(mode="json")
+        writer.writerow({k: row.get(k, "") or "" for k in columns})
+    return PlainTextResponse(output.getvalue(), media_type="text/csv", headers={
+        "Content-Disposition": 'attachment; filename="RiskPilot_Harborview_Synthetic_Cash_Demo.csv"',
+        "Cache-Control": "no-store",
+    })
+
+
 @app.get("/api/scenarios")
 def scenarios():
     return [
@@ -456,7 +480,7 @@ def scenarios():
             ),
         }
         for scenario in (
-            get_v2_demo_scenarios()
+            available_premium_scenarios()
         )
     ]
 
@@ -514,9 +538,16 @@ def what_if(
         scenario = entry["scenario"]
     else:
         try:
-            scenario = get_v2_demo_scenario(payload.scenario_id)
+            scenario = resolve_premium_scenario(payload.scenario_id)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    # Apply the same eligible-event rule to public, synthetic and customer
+    # scenarios. A request must never be marked verified if its claimed shock
+    # cannot change any supported MODELLED cash event.
+    _validate_customer_what_if(payload, {
+        "capabilities": _customer_levers(scenario)
+    })
 
     request = V2WhatIfRequest(
         revenue_change_pct=(
@@ -542,6 +573,12 @@ def what_if(
         "applied_changes": list(
             outcome.applied_changes
         ),
+        "effect": {
+            "revenue_events_adjusted": _customer_levers(scenario)["modelled_revenue_events"] if payload.revenue_change_pct else 0,
+            "cost_events_adjusted": _customer_levers(scenario)["modelled_cost_events"] if payload.cost_change_pct else 0,
+            "reserve_policy_adjusted": (payload.management_reserve is not None and payload.management_reserve != scenario.management_reserve),
+            "neutral_recalculation": (not payload.revenue_change_pct and not payload.cost_change_pct and (payload.management_reserve is None or payload.management_reserve == scenario.management_reserve)),
+        },
         "baseline_scenario_id": (
             outcome.baseline_scenario_id
         ),
@@ -589,6 +626,23 @@ def agent(
             ),
         ) from exc
 
+    # AI tools share the frozen V2 engine and can produce a temporary overlay.
+    # Do not present an unchanged forecast as an applied operating shock when
+    # the current cash evidence lacks eligible MODELLED event categories.
+    if getattr(context, "what_if_request", None) is not None:
+        attempted = context.what_if_request
+        caps = _customer_levers(scenario)
+        if attempted.revenue_change_pct and not caps["modelled_revenue_events"]:
+            raise HTTPException(status_code=422, detail=(
+                "The AI requested a revenue shock but the current forecast has "
+                "no eligible MODELLED residual sales receipts. No verified revenue shock was applied."
+            ))
+        if attempted.cost_change_pct and not caps["modelled_cost_events"]:
+            raise HTTPException(status_code=422, detail=(
+                "The AI requested an operating cost shock but the current forecast has "
+                "no eligible MODELLED variable operating costs. No verified cost shock was applied."
+            ))
+
     active_result = result
     active_scenario = scenario
 
@@ -619,6 +673,28 @@ def agent(
             active_result,
         ),
     }
+
+
+@app.get("/api/agent/verified-workspace/{scenario_id}")
+def verified_agent_workspace(
+    scenario_id: str,
+    customer_session_id: str | None = None,
+):
+    """Return read-only engine snapshots without invoking or simulating AI."""
+    scenario, result = _analysis_context(scenario_id, customer_session_id)
+    context = V2CopilotContext(
+        liquidity_brief=result.brief,
+        baseline_scenario=scenario,
+    )
+    payload = build_verified_agent_workspace(
+        context,
+        scenario_name=scenario.name,
+        imported=customer_session_id is not None,
+    )
+    return JSONResponse(
+        content=jsonable_encoder(payload),
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get(
@@ -971,3 +1047,7 @@ async def customer_multi_import(
         uncertainty_profile=uncertainty_profile,
         upload_reference="multi-source-finance-import",
     )
+
+# Additional premium workspaces reuse existing RiskPilot calculation engines.
+from src.api.premium_restoration import router as restoration_router
+app.include_router(restoration_router)

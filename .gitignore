@@ -5,3 +5,6 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 *.egg-info/
+/web/dist/
+/web/node_modules/
+/.venv/

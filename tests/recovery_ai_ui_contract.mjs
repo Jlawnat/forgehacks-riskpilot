@@ -1,0 +1,11 @@
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+const source = readFileSync(new URL('../web/src/RestoredWorkspaces.jsx', import.meta.url), 'utf8');
+assert.match(source, /\/recovery\/decision-insight/);
+assert.match(source, /reference_plan: selectedOptimisedPlan\.candidate\.plan/);
+assert.match(source, /Generate AI Decision Insight/);
+assert.match(source, /<AiMarkdown text=\{aiInsight\.answer\}/);
+assert.match(source, /setAiInsight\(null\)/);
+assert.match(source, /fingerprint === evidenceFingerprint/);
+assert.match(source, /Actual AI generation requires configured credentials/);
+console.log('PASS: 7 AI Recovery UI contract assertions');
