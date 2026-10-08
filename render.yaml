@@ -1,0 +1,14 @@
+# Render Blueprint: New > Blueprint > connect the GitHub repository.
+services:
+  - type: web
+    name: riskpilot-forgehacks-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: RISKPILOT_DEMO_PASSWORD
+        sync: false
+      - key: PYTHONUNBUFFERED
+        value: "1"

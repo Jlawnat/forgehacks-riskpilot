@@ -1,0 +1,17 @@
+# Dedicated demo-container runtime requirements. No developer-only test tools.
+# Financial packages align with the archived verified Python 3.12 environment.
+fastapi>=0.115,<1
+uvicorn>=0.34,<1
+python-multipart>=0.0.20,<1
+numpy==2.3.5
+pandas==2.2.3
+scipy==1.17.0
+statsmodels==0.15.0
+scikit-learn==1.8.0
+pydantic==2.13.5
+openai==3.26.0
+openai-agents==0.23.1
+python-dotenv==1.2.4
+reportlab>=4.2,<5
+openpyxl==3.1.5
+plotly==7.1.0
